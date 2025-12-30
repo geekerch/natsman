@@ -600,10 +600,6 @@ func SetupRouter(exeDir string, appCfg *config.AppConfig, configPath string, tmp
 		// List KV buckets
 		api.GET("/kv/buckets", func(c *gin.Context) {
 			profile := c.Query("profile")
-			if profile == "" {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "profile parameter is required"})
-				return
-			}
 			
 			result, err := kvService.ListKVBuckets(application.ListKVBucketsRequest{Profile: profile})
 			if err != nil {
@@ -633,10 +629,6 @@ func SetupRouter(exeDir string, appCfg *config.AppConfig, configPath string, tmp
 		api.DELETE("/kv/buckets/:bucket", func(c *gin.Context) {
 			bucketName := c.Param("bucket")
 			profile := c.Query("profile")
-			if profile == "" {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "profile parameter is required"})
-				return
-			}
 			
 			req := application.DeleteKVBucketRequest{
 				Profile:    profile,
@@ -655,10 +647,6 @@ func SetupRouter(exeDir string, appCfg *config.AppConfig, configPath string, tmp
 		api.GET("/kv/buckets/:bucket/info", func(c *gin.Context) {
 			bucketName := c.Param("bucket")
 			profile := c.Query("profile")
-			if profile == "" {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "profile parameter is required"})
-				return
-			}
 			
 			info, err := kvService.GetKVBucketInfo(application.GetKVBucketInfoRequest{
 				Profile:    profile,
@@ -676,10 +664,6 @@ func SetupRouter(exeDir string, appCfg *config.AppConfig, configPath string, tmp
 		api.GET("/kv/buckets/:bucket/keys", func(c *gin.Context) {
 			bucketName := c.Param("bucket")
 			profile := c.Query("profile")
-			if profile == "" {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "profile parameter is required"})
-				return
-			}
 			
 			req := application.KVKeysRequest{
 				Profile:    profile,
@@ -700,10 +684,6 @@ func SetupRouter(exeDir string, appCfg *config.AppConfig, configPath string, tmp
 			bucketName := c.Param("bucket")
 			key := c.Param("key")
 			profile := c.Query("profile")
-			if profile == "" {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "profile parameter is required"})
-				return
-			}
 			
 			var body struct {
 				Value string `json:"value"`
@@ -734,10 +714,6 @@ func SetupRouter(exeDir string, appCfg *config.AppConfig, configPath string, tmp
 			bucketName := c.Param("bucket")
 			key := c.Param("key")
 			profile := c.Query("profile")
-			if profile == "" {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "profile parameter is required"})
-				return
-			}
 			
 			req := application.KVGetRequest{
 				Profile:    profile,
@@ -759,10 +735,6 @@ func SetupRouter(exeDir string, appCfg *config.AppConfig, configPath string, tmp
 			bucketName := c.Param("bucket")
 			key := c.Param("key")
 			profile := c.Query("profile")
-			if profile == "" {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "profile parameter is required"})
-				return
-			}
 			
 			req := application.KVDeleteRequest{
 				Profile:    profile,
@@ -783,10 +755,6 @@ func SetupRouter(exeDir string, appCfg *config.AppConfig, configPath string, tmp
 			bucketName := c.Param("bucket")
 			key := c.Param("key")
 			profile := c.Query("profile")
-			if profile == "" {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "profile parameter is required"})
-				return
-			}
 			
 			req := application.KVHistoryRequest{
 				Profile:    profile,
