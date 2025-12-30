@@ -4,7 +4,7 @@ import { RequestPayload, SendReqResult, TreeNode, Template, StreamCreateRequest,
 const API_BASE = '/api';
 
 // Helper to access window.go
-const getWails = () => (window as any).go?.main?.App;
+const getWails = () => (window as any).go?.wails?.App || (window as any).go?.main?.App;
 
 export const ApiService = {
     // --- Templates ---
@@ -123,7 +123,7 @@ export const ApiService = {
         if (wails) {
             return wails.FetchAllStreamMessages(stream, refresh);
         }
-        const res = await fetch(`${API_BASE}/jetstream/streams/${stream}/messages?refresh=${refresh}`);
+        const res = await fetch(`${API_BASE}/jetstream/streams/${stream}/messages/all?refresh=${refresh}`);
         if (!res.ok) throw new Error('Failed to get stream messages');
         return res.json();
     },
