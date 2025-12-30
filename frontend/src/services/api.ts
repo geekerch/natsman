@@ -65,5 +65,11 @@ export const ApiService = {
             method: 'DELETE',
         });
         if (!res.ok) throw new Error('Failed to delete stream');
+    },
+
+    async getStreamMessages(stream: string, limit: number = 10): Promise<any> {
+        const res = await fetch(`${API_BASE}/jetstream/streams/${stream}/messages?limit=${limit}`);
+        if (!res.ok) throw new Error('Failed to get stream messages');
+        return res.json();
     }
 };
