@@ -789,25 +789,23 @@ func setupStaticFiles(r *gin.Engine, exeDir string, embeddedFS embed.FS) {
 		// Use embedded files (production mode)
 		log.Println("📦 Using embedded web files")
 
-		// Create a sub-filesystem rooted at "web"
-		webFS, err := fs.Sub(embeddedFS, "web")
+		// Create a sub-filesystem rooted at "frontend/dist"
+		distFS, err := fs.Sub(embeddedFS, "frontend/dist")
 		if err != nil {
 			log.Fatalf("Failed to create web sub-filesystem: %v", err)
 		}
 
-		// Serve static files from embedded FS
-		r.StaticFS("/web", http.FS(webFS))
-
-		r.GET("/app.js", func(c *gin.Context) {
-			c.FileFromFS("app.js", http.FS(webFS))
-		})
-		r.GET("/style.css", func(c *gin.Context) {
-			c.FileFromFS("style.css", http.FS(webFS))
-		})
+		// Serve assets folder
+		// We need to serve /assets from frontend/dist/assets
+		assetsFS, err := fs.Sub(distFS, "assets")
+		if err != nil {
+			log.Fatalf("Failed to create assets sub-filesystem: %v", err)
+		}
+		r.StaticFS("/assets", http.FS(assetsFS))
 
 		// Serve index.html at root
 		r.GET("/", func(c *gin.Context) {
-			data, err := embeddedFS.ReadFile("web/index.html")
+			data, err := embeddedFS.ReadFile("frontend/dist/index.html")
 			if err != nil {
 				c.String(http.StatusInternalServerError, "Failed to load index.html")
 				return

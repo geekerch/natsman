@@ -16,7 +16,7 @@ import (
 	"natsman/internal/interfaces/wails"
 )
 
-//go:embed web/*
+//go:embed frontend/dist/*
 var embeddedFS embed.FS
 
 var (
@@ -76,7 +76,7 @@ func main() {
 	r := http.SetupRouter(exeDir, appCfg, configPath, fileStore, fileStore, reqService, subService, jsService, kvService, embeddedFS)
 
 	// Mode Handling via StartApp (implementation depends on build tags)
-	webFS, err := fs.Sub(embeddedFS, "web")
+	webFS, err := fs.Sub(embeddedFS, "frontend/dist")
 	if err != nil {
 		log.Fatalf("Failed to create web filesystem: %v", err)
 	}

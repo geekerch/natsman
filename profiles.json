@@ -1,16 +1,16 @@
 {
   "globals_profiles": [
     {
-      "name": "Default",
-      "variables": {}
+      "Name": "Default",
+      "Variables": {}
     }
   ],
   "active_globals_profile": "Default",
   "nats_profiles": [
     {
-      "name": "Default",
-      "url": "nats://172.16.8.9:24222",
-      "creds_path": ""
+      "Name": "Default",
+      "URL": "nats://172.16.8.9:24222",
+      "CredsPath": ""
     }
   ],
   "active_nats_profile": "Default",

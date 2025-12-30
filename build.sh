@@ -4,6 +4,14 @@ set -e
 # Ensure wails is in PATH
 export PATH=$PATH:$(go env GOPATH)/bin
 
+# Build Frontend first (Required for Server Mode embedding)
+echo "Building Frontend..."
+cd frontend
+npm install
+npm run build
+cd ..
+echo "✅ Frontend build complete"
+
 # Build Server-Only Version
 # This uses the default build tags (!desktop)
 echo "Building Server Mode (natsman-server)..."
