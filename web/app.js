@@ -736,7 +736,10 @@ const app = {
 
         // Click handler
         if (!node.is_folder) {
-            item.onclick = () => app.selectTemplate(node.path);
+            item.onclick = () => {
+                console.log('[TreeNode] File clicked:', node.path);
+                app.selectTemplate(node.path);
+            };
         } else {
             item.onclick = (e) => {
                 // Clicking folder row (not name/toggle) allows selecting folder context? 
@@ -843,8 +846,11 @@ const app = {
     },
 
     selectTemplate: async (path) => {
+        console.log('[selectTemplate] Called with path:', path);
         try {
+            console.log('[selectTemplate] Fetching template...');
             const template = await Backend.getTemplate(path);
+            console.log('[selectTemplate] Template loaded:', template);
 
             app.state.currentPath = path;
             app.state.currentTemplate = template;
@@ -864,8 +870,10 @@ const app = {
             app.state.localVars = {};
             app.renderTree();
             app.parseVariables();
+            console.log('[selectTemplate] Template loaded successfully');
         } catch (e) {
-            console.error('Failed to load template:', e);
+            console.error('[selectTemplate] Failed to load template:', e);
+            app.showToast(`Failed to load template: ${e.message}`, 'error');
         }
     },
 

@@ -1,6 +1,7 @@
 package natsclient
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -114,7 +115,9 @@ func (c *Client) CreateStream(cfg jetstream.StreamConfig) (jetstream.Stream, err
 	if c.js == nil {
 		return nil, fmt.Errorf("JetStream not initialized")
 	}
-	return c.js.CreateStream(nil, cfg)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return c.js.CreateStream(ctx, cfg)
 }
 
 // GetStream retrieves a stream by name
@@ -122,7 +125,9 @@ func (c *Client) GetStream(name string) (jetstream.Stream, error) {
 	if c.js == nil {
 		return nil, fmt.Errorf("JetStream not initialized")
 	}
-	return c.js.Stream(nil, name)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return c.js.Stream(ctx, name)
 }
 
 // DeleteStream deletes a stream
@@ -130,7 +135,9 @@ func (c *Client) DeleteStream(name string) error {
 	if c.js == nil {
 		return fmt.Errorf("JetStream not initialized")
 	}
-	return c.js.DeleteStream(nil, name)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return c.js.DeleteStream(ctx, name)
 }
 
 // ListStreams lists all streams
@@ -139,8 +146,11 @@ func (c *Client) ListStreams() []string {
 		return nil
 	}
 	
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	
 	var names []string
-	streams := c.js.ListStreams(nil)
+	streams := c.js.ListStreams(ctx)
 	for stream := range streams.Info() {
 		names = append(names, stream.Config.Name)
 	}
@@ -152,7 +162,9 @@ func (c *Client) JSPublish(subject string, data []byte) (*jetstream.PubAck, erro
 	if c.js == nil {
 		return nil, fmt.Errorf("JetStream not initialized")
 	}
-	return c.js.Publish(nil, subject, data)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return c.js.Publish(ctx, subject, data)
 }
 
 // CreateConsumer creates a JetStream consumer
@@ -161,12 +173,15 @@ func (c *Client) CreateConsumer(streamName string, cfg jetstream.ConsumerConfig)
 		return nil, fmt.Errorf("JetStream not initialized")
 	}
 	
-	stream, err := c.js.Stream(nil, streamName)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	
+	stream, err := c.js.Stream(ctx, streamName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get stream: %w", err)
 	}
 	
-	return stream.CreateConsumer(nil, cfg)
+	return stream.CreateConsumer(ctx, cfg)
 }
 
 // GetConsumer retrieves a consumer
@@ -175,12 +190,15 @@ func (c *Client) GetConsumer(streamName, consumerName string) (jetstream.Consume
 		return nil, fmt.Errorf("JetStream not initialized")
 	}
 	
-	stream, err := c.js.Stream(nil, streamName)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	
+	stream, err := c.js.Stream(ctx, streamName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get stream: %w", err)
 	}
 	
-	return stream.Consumer(nil, consumerName)
+	return stream.Consumer(ctx, consumerName)
 }
 
 // DeleteConsumer deletes a consumer
@@ -189,11 +207,14 @@ func (c *Client) DeleteConsumer(streamName, consumerName string) error {
 		return fmt.Errorf("JetStream not initialized")
 	}
 	
-	stream, err := c.js.Stream(nil, streamName)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	
+	stream, err := c.js.Stream(ctx, streamName)
 	if err != nil {
 		return fmt.Errorf("failed to get stream: %w", err)
 	}
 	
-	return stream.DeleteConsumer(nil, consumerName)
+	return stream.DeleteConsumer(ctx, consumerName)
 }
 
