@@ -16,7 +16,7 @@ import (
 )
 
 // SetupRouter initializes the Gin engine and defines all API routes
-func SetupRouter(exeDir string, appCfg *AppConfig, configPath string, dataStore *store.Store, reqService *service.RequestService, embeddedFS embed.FS) *gin.Engine {
+func SetupRouter(exeDir string, appCfg *AppConfig, configPath string, dataStore *store.Store, reqService *service.RequestService, subService *service.SubscribeService, embeddedFS embed.FS) *gin.Engine {
 	// Setup Gin
 	r := gin.New() // Use New() to avoid default Logger causing double logging potentially
 	r.Use(gin.Recovery())
@@ -330,6 +330,63 @@ func SetupRouter(exeDir string, appCfg *AppConfig, configPath string, dataStore 
 				"status":  result.Status,
 				"elapsed": result.Elapsed,
 			})
+		})
+
+		// Subscribe endpoints
+		api.POST("/subscribe", func(c *gin.Context) {
+			var req service.SubscribePayload
+			if err := c.BindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+
+			if err := subService.Subscribe(req); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{"status": "subscribed", "subject": req.Subject})
+		})
+
+		api.POST("/unsubscribe", func(c *gin.Context) {
+			var req struct {
+				Subject string `json:"subject"`
+			}
+			if err := c.BindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+
+			if err := subService.Unsubscribe(req.Subject); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{"status": "unsubscribed"})
+		})
+
+		api.GET("/subscriptions", func(c *gin.Context) {
+			subjects := subService.GetActiveSubscriptions()
+			c.JSON(http.StatusOK, gin.H{"subscriptions": subjects})
+		})
+
+		api.GET("/subscriptions/:subject/messages", func(c *gin.Context) {
+			subject := c.Param("subject")
+			messages, err := subService.GetMessages(subject)
+			if err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"messages": messages})
+		})
+
+		api.DELETE("/subscriptions/:subject/messages", func(c *gin.Context) {
+			subject := c.Param("subject")
+			if err := subService.ClearMessages(subject); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"status": "cleared"})
 		})
 	}
 

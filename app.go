@@ -9,16 +9,18 @@ import (
 
 // App struct
 type App struct {
-	ctx     context.Context
-	store   *store.Store
-	service *service.RequestService
+	ctx        context.Context
+	store      *store.Store
+	service    *service.RequestService
+	subService *service.SubscribeService
 }
 
 // NewApp creates a new App application struct
-func NewApp(store *store.Store, service *service.RequestService) *App {
+func NewApp(store *store.Store, service *service.RequestService, subService *service.SubscribeService) *App {
 	return &App{
-		store:   store,
-		service: service,
+		store:      store,
+		service:    service,
+		subService: subService,
 	}
 }
 
@@ -126,6 +128,28 @@ func (a *App) ExtractVariables(content string) []string {
 
 func (a *App) EvalDynamicScript(script string) (string, error) {
 	return a.service.EvalDynamicScript(script)
+}
+
+// --- Subscribe Service Wrappers ---
+
+func (a *App) Subscribe(payload service.SubscribePayload) error {
+	return a.subService.Subscribe(payload)
+}
+
+func (a *App) Unsubscribe(subject string) error {
+	return a.subService.Unsubscribe(subject)
+}
+
+func (a *App) GetSubscriptionMessages(subject string) ([]service.SubscriptionMessage, error) {
+	return a.subService.GetMessages(subject)
+}
+
+func (a *App) GetActiveSubscriptions() []string {
+	return a.subService.GetActiveSubscriptions()
+}
+
+func (a *App) ClearSubscriptionMessages(subject string) error {
+	return a.subService.ClearMessages(subject)
 }
 
 // Simple test method

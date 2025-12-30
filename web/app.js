@@ -164,6 +164,10 @@ const Backend = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(reqPayload)
         });
+        if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+        }
         return await res.json();
     },
 
@@ -177,6 +181,53 @@ const Backend = {
         const data = await res.json(); // API returns { result: "..." } or { error: "..." }
         if (data.error) throw new Error(data.error);
         return data.result;
+    },
+
+    // Pub/Sub
+    async subscribe(payload) {
+        if (this.isDesktop()) return await window.go.main.App.Subscribe(payload);
+        const res = await fetch(API_BASE + '/api/subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        return data;
+    },
+
+    async unsubscribe(subject) {
+        if (this.isDesktop()) return await window.go.main.App.Unsubscribe(subject);
+        const res = await fetch(API_BASE + '/api/unsubscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subject })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        return data;
+    },
+
+    async getActiveSubscriptions() {
+        if (this.isDesktop()) return await window.go.main.App.GetActiveSubscriptions();
+        const res = await fetch(API_BASE + '/api/subscriptions');
+        const data = await res.json();
+        return data.subscriptions || [];
+    },
+
+    async getSubscriptionMessages(subject) {
+        if (this.isDesktop()) return await window.go.main.App.GetSubscriptionMessages(subject);
+        const res = await fetch(API_BASE + `/api/subscriptions/${encodeURIComponent(subject)}/messages`);
+        const data = await res.json();
+        return data.messages || [];
+    },
+
+    async clearSubscriptionMessages(subject) {
+        if (this.isDesktop()) return await window.go.main.App.ClearSubscriptionMessages(subject);
+        const res = await fetch(API_BASE + `/api/subscriptions/${encodeURIComponent(subject)}/messages`, {
+            method: 'DELETE'
+        });
+        return await res.json();
     }
 };
 
@@ -200,7 +251,13 @@ const app = {
         globalsProfiles: [],
         activeGlobalsProfile: '',
         natsProfiles: [],
-        activeNatsProfile: ''
+        activeNatsProfile: '',
+        // Pub/Sub
+        mode: 'request', // 'request' or 'pubsub'
+        activeSubscriptions: [],
+        selectedSubscription: null,
+        subscriptionMessages: {},
+        messageRefreshInterval: null
     },
 
     showToast: (message, type = 'info') => {
@@ -724,6 +781,12 @@ const app = {
             document.getElementById('template-name').value = path.split('/').pop();
             document.getElementById('subject-input').value = template.subject || '';
             document.getElementById('payload-input').value = template.payload || '';
+            
+            // Set mode
+            const mode = template.mode || 'request';
+            app.state.mode = mode;
+            document.getElementById('mode-select').value = mode;
+            app.onModeChange();
 
             app.state.localVars = {};
             app.renderTree();
@@ -783,7 +846,7 @@ const app = {
             }
             const fullPath = folderPath + "/" + name;
             try {
-                await Backend.createTemplate(fullPath, { subject: "", payload: "" });
+                await Backend.createTemplate(fullPath, { mode: "request", subject: "", payload: "" });
                 await app.loadTree();
                 await app.selectTemplate(fullPath);
             } catch (e) {
@@ -885,6 +948,7 @@ const app = {
         }
 
         const template = {
+            mode: app.state.mode,
             subject: document.getElementById('subject-input').value,
             payload: document.getElementById('payload-input').value
         };
@@ -1144,6 +1208,7 @@ const app = {
     sendRequest: async () => {
         const subject = document.getElementById('subject-input').value;
         const body = document.getElementById('payload-input').value;
+        const mode = app.state.mode;
 
         const statusEl = document.getElementById('response-status');
         const timeEl = document.getElementById('response-time');
@@ -1151,7 +1216,7 @@ const app = {
         const infoSubject = document.getElementById('info-subject');
         const infoSize = document.getElementById('info-size');
 
-        statusEl.textContent = 'Sending...';
+        statusEl.textContent = mode === 'pubsub' ? 'Publishing...' : 'Sending...';
         statusEl.className = 'response-status';
         timeEl.textContent = '';
         outputEl.textContent = 'Waiting for response...';
@@ -1159,6 +1224,7 @@ const app = {
 
         try {
             const result = await Backend.sendRequest({
+                mode,
                 subject,
                 body,
                 variables: { ...app.state.globalVars, ...app.state.localVars },
@@ -1168,15 +1234,17 @@ const app = {
                 }
             });
 
-            statusEl.textContent = `Status: ${result.status}`;
+            statusEl.textContent = `Status: ${result.status || 'OK'}`;
             statusEl.className = 'response-status success';
-            timeEl.textContent = result.elapsed;
+            timeEl.textContent = result.elapsed || '';
 
-            let responseText = result.reply;
-            try {
-                const obj = JSON.parse(result.reply);
-                responseText = JSON.stringify(obj, null, 2);
-            } catch { }
+            let responseText = result.reply || '';
+            if (responseText && typeof responseText === 'string') {
+                try {
+                    const obj = JSON.parse(responseText);
+                    responseText = JSON.stringify(obj, null, 2);
+                } catch { }
+            }
 
             outputEl.textContent = responseText;
             outputEl.className = 'response-code success';
@@ -1188,6 +1256,235 @@ const app = {
             statusEl.className = 'response-status error';
             outputEl.textContent = e.toString();
             outputEl.className = 'response-code error';
+        }
+    },
+
+    // Pub/Sub Functions
+    onModeChange: () => {
+        const modeSelect = document.getElementById('mode-select');
+        const mode = modeSelect.value;
+        app.state.mode = mode;
+
+        const sendBtn = document.getElementById('send-btn');
+        const sendBtnText = document.getElementById('send-btn-text');
+        
+        if (mode === 'pubsub') {
+            sendBtnText.textContent = 'Publish';
+        } else {
+            sendBtnText.textContent = 'Send Request';
+        }
+    },
+
+    startSubscription: async () => {
+        const subject = document.getElementById('subject-input').value;
+        if (!subject.trim()) {
+            app.showToast('Please enter a subject', 'error');
+            return;
+        }
+
+        try {
+            await Backend.subscribe({
+                subject,
+                config: {
+                    url: document.getElementById('config-url').value,
+                    creds_path: document.getElementById('config-creds').value
+                }
+            });
+            app.showToast(`Subscribed to: ${subject}`, 'success');
+            await app.loadActiveSubscriptions();
+        } catch (e) {
+            console.error('Failed to subscribe:', e);
+            app.showToast(`Failed to subscribe: ${e.message}`, 'error');
+        }
+    },
+
+    addNewSubscription: async () => {
+        const input = document.getElementById('new-subscription-subject');
+        const subject = input.value.trim();
+        
+        if (!subject) {
+            app.showToast('Please enter a subject', 'error');
+            return;
+        }
+
+        try {
+            await Backend.subscribe({
+                subject,
+                config: {
+                    url: document.getElementById('config-url').value,
+                    creds_path: document.getElementById('config-creds').value
+                }
+            });
+            app.showToast(`Subscribed to: ${subject}`, 'success');
+            input.value = ''; // Clear input
+            await app.loadActiveSubscriptions();
+            app.renderSubscriptionsList();
+        } catch (e) {
+            console.error('Failed to subscribe:', e);
+            app.showToast(`Failed to subscribe: ${e.message}`, 'error');
+        }
+    },
+
+    loadActiveSubscriptions: async () => {
+        try {
+            app.state.activeSubscriptions = await Backend.getActiveSubscriptions();
+        } catch (e) {
+            console.error('Failed to load subscriptions:', e);
+        }
+    },
+
+    openSubscriptions: async () => {
+        await app.loadActiveSubscriptions();
+        app.renderSubscriptionsList();
+        
+        // Start auto-refresh
+        if (app.state.messageRefreshInterval) {
+            clearInterval(app.state.messageRefreshInterval);
+        }
+        app.state.messageRefreshInterval = setInterval(() => {
+            if (app.state.selectedSubscription) {
+                app.refreshMessages();
+            }
+        }, 2000);
+
+        document.getElementById('subscriptions-modal').classList.add('active');
+    },
+
+    closeSubscriptions: () => {
+        if (app.state.messageRefreshInterval) {
+            clearInterval(app.state.messageRefreshInterval);
+            app.state.messageRefreshInterval = null;
+        }
+        document.getElementById('subscriptions-modal').classList.remove('active');
+    },
+
+    renderSubscriptionsList: () => {
+        const listEl = document.getElementById('subscriptions-list');
+        const countEl = document.getElementById('subscription-count');
+        if (!listEl) return;
+
+        // Update count
+        if (countEl) {
+            countEl.textContent = app.state.activeSubscriptions.length;
+        }
+
+        if (app.state.activeSubscriptions.length === 0) {
+            listEl.innerHTML = '<p class="empty-state">No active subscriptions<br><small>Enter a subject above to subscribe</small></p>';
+            return;
+        }
+
+        listEl.innerHTML = app.state.activeSubscriptions.map(subject => `
+            <div class="subscription-item ${app.state.selectedSubscription === subject ? 'active' : ''}" 
+                 data-subject="${subject}">
+                <div class="subscription-subject">${subject}</div>
+                <button class="btn-icon-sm unsubscribe-btn" data-subject="${subject}" title="Unsubscribe">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="3" y1="3" x2="9" y2="9" />
+                        <line x1="9" y1="3" x2="3" y2="9" />
+                    </svg>
+                </button>
+            </div>
+        `).join('');
+
+        // Add click handlers
+        listEl.querySelectorAll('.subscription-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                if (e.target.closest('.unsubscribe-btn')) return;
+                app.selectSubscription(item.dataset.subject);
+            });
+        });
+
+        listEl.querySelectorAll('.unsubscribe-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await app.unsubscribeFromSubject(btn.dataset.subject);
+            });
+        });
+    },
+
+    selectSubscription: async (subject) => {
+        app.state.selectedSubscription = subject;
+        app.renderSubscriptionsList();
+        await app.loadMessages(subject);
+    },
+
+    unsubscribeFromSubject: async (subject) => {
+        const confirmed = await app.showConfirm(`Unsubscribe from "${subject}"?`);
+        if (!confirmed) return;
+
+        try {
+            await Backend.unsubscribe(subject);
+            app.showToast(`Unsubscribed from: ${subject}`, 'success');
+            
+            if (app.state.selectedSubscription === subject) {
+                app.state.selectedSubscription = null;
+                document.getElementById('messages-list').innerHTML = 
+                    '<p class="empty-state">Select a subscription to view messages</p>';
+            }
+            
+            await app.loadActiveSubscriptions();
+            app.renderSubscriptionsList();
+        } catch (e) {
+            console.error('Failed to unsubscribe:', e);
+            app.showToast(`Failed to unsubscribe: ${e.message}`, 'error');
+        }
+    },
+
+    loadMessages: async (subject) => {
+        try {
+            const messages = await Backend.getSubscriptionMessages(subject);
+            app.state.subscriptionMessages[subject] = messages;
+            app.renderMessages(subject);
+        } catch (e) {
+            console.error('Failed to load messages:', e);
+            app.showToast(`Failed to load messages: ${e.message}`, 'error');
+        }
+    },
+
+    renderMessages: (subject) => {
+        const messagesEl = document.getElementById('messages-list');
+        if (!messagesEl) return;
+
+        const messages = app.state.subscriptionMessages[subject] || [];
+        
+        if (messages.length === 0) {
+            messagesEl.innerHTML = '<p class="empty-state">No messages yet</p>';
+            return;
+        }
+
+        messagesEl.innerHTML = messages.map((msg, idx) => `
+            <div class="message-item">
+                <div class="message-header">
+                    <span class="message-index">#${idx + 1}</span>
+                    <span class="message-time">${new Date(msg.timestamp).toLocaleTimeString()}</span>
+                </div>
+                <div class="message-subject">${msg.subject}</div>
+                <pre class="message-data">${msg.data}</pre>
+            </div>
+        `).join('');
+
+        // Auto-scroll to bottom
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+    },
+
+    refreshMessages: async () => {
+        if (!app.state.selectedSubscription) return;
+        await app.loadMessages(app.state.selectedSubscription);
+    },
+
+    clearMessages: async () => {
+        if (!app.state.selectedSubscription) return;
+
+        const confirmed = await app.showConfirm('Clear all messages?');
+        if (!confirmed) return;
+
+        try {
+            await Backend.clearSubscriptionMessages(app.state.selectedSubscription);
+            app.showToast('Messages cleared', 'success');
+            await app.loadMessages(app.state.selectedSubscription);
+        } catch (e) {
+            console.error('Failed to clear messages:', e);
+            app.showToast(`Failed to clear messages: ${e.message}`, 'error');
         }
     },
 
@@ -1508,6 +1805,42 @@ const app = {
             document.getElementById('add-global-btn').onclick = app.addGlobalVar;
             document.getElementById('save-globals-btn').onclick = app.saveGlobals;
             document.querySelector('#globals-modal .modal-backdrop').onclick = app.closeGlobals;
+
+            // Mode Selection
+            const modeSelect = document.getElementById('mode-select');
+            if (modeSelect) {
+                modeSelect.addEventListener('change', app.onModeChange);
+            }
+
+            // Subscribe Button
+            const subscribeBtn = document.getElementById('subscribe-btn');
+            if (subscribeBtn) subscribeBtn.onclick = app.startSubscription;
+
+            // Subscriptions Modal
+            document.getElementById('subscriptions-btn').onclick = app.openSubscriptions;
+            document.getElementById('subscriptions-close').onclick = app.closeSubscriptions;
+            document.getElementById('close-subscriptions-btn').onclick = app.closeSubscriptions;
+            document.querySelector('#subscriptions-modal .modal-backdrop').onclick = app.closeSubscriptions;
+            
+            // Add subscription button
+            const addSubscriptionBtn = document.getElementById('add-subscription-btn');
+            if (addSubscriptionBtn) addSubscriptionBtn.onclick = app.addNewSubscription;
+            
+            // New subscription input - Enter key
+            const newSubInput = document.getElementById('new-subscription-subject');
+            if (newSubInput) {
+                newSubInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        app.addNewSubscription();
+                    }
+                });
+            }
+            
+            const refreshBtn = document.getElementById('refresh-messages-btn');
+            if (refreshBtn) refreshBtn.onclick = app.refreshMessages;
+            
+            const clearBtn = document.getElementById('clear-messages-btn');
+            if (clearBtn) clearBtn.onclick = app.clearMessages;
 
             console.log('[SetupEvents] Finished setupEventListeners');
         } catch (e) {
