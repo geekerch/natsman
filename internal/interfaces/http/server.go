@@ -5,8 +5,6 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 
 	"natsman/internal/application"
@@ -775,42 +773,30 @@ func SetupRouter(exeDir string, appCfg *config.AppConfig, configPath string, tmp
 }
 
 func setupStaticFiles(r *gin.Engine, exeDir string, embeddedFS embed.FS) {
-	// Check if local web directory exists (development mode)
-	webDir := filepath.Join(exeDir, "web")
-	if stat, err := os.Stat(webDir); err == nil && stat.IsDir() {
-		log.Printf("📁 Using local web directory: %s", webDir)
-		r.Static("/web", webDir)
-		r.StaticFile("/app.js", filepath.Join(webDir, "app.js"))
-		r.StaticFile("/style.css", filepath.Join(webDir, "style.css"))
-		r.GET("/", func(c *gin.Context) {
-			c.File(filepath.Join(webDir, "index.html"))
-		})
-	} else {
-		// Use embedded files (production mode)
-		log.Println("📦 Using embedded web files")
+	// Always use embedded files (production mode)
+	log.Println("📦 Using embedded web files")
 
-		// Create a sub-filesystem rooted at "frontend/dist"
-		distFS, err := fs.Sub(embeddedFS, "frontend/dist")
-		if err != nil {
-			log.Fatalf("Failed to create web sub-filesystem: %v", err)
-		}
-
-		// Serve assets folder
-		// We need to serve /assets from frontend/dist/assets
-		assetsFS, err := fs.Sub(distFS, "assets")
-		if err != nil {
-			log.Fatalf("Failed to create assets sub-filesystem: %v", err)
-		}
-		r.StaticFS("/assets", http.FS(assetsFS))
-
-		// Serve index.html at root
-		r.GET("/", func(c *gin.Context) {
-			data, err := embeddedFS.ReadFile("frontend/dist/index.html")
-			if err != nil {
-				c.String(http.StatusInternalServerError, "Failed to load index.html")
-				return
-			}
-			c.Data(http.StatusOK, "text/html; charset=utf-8", data)
-		})
+	// Create a sub-filesystem rooted at "frontend/dist"
+	distFS, err := fs.Sub(embeddedFS, "frontend/dist")
+	if err != nil {
+		log.Fatalf("Failed to create web sub-filesystem: %v", err)
 	}
+
+	// Serve assets folder
+	// We need to serve /assets from frontend/dist/assets
+	assetsFS, err := fs.Sub(distFS, "assets")
+	if err != nil {
+		log.Fatalf("Failed to create assets sub-filesystem: %v", err)
+	}
+	r.StaticFS("/assets", http.FS(assetsFS))
+
+	// Serve index.html at root
+	r.GET("/", func(c *gin.Context) {
+		data, err := embeddedFS.ReadFile("frontend/dist/index.html")
+		if err != nil {
+			c.String(http.StatusInternalServerError, "Failed to load index.html")
+			return
+		}
+		c.Data(http.StatusOK, "text/html; charset=utf-8", data)
+	})
 }
