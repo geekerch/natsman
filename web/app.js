@@ -1661,13 +1661,18 @@ const app = {
             }
             
             const startSeq = app.state.currentStartSeq;
-            
             const result = await Backend.getStreamMessages(app.state.currentStreamName, limit, startSeq);
             app.state.currentMessagesResult = result;
             
             document.getElementById('stream-total-messages').textContent = result.total || 0;
             app.renderStreamMessages(result.messages || []);
             app.updatePaginationControls(result);
+            
+            // Reset scroll position to top
+            const messagesList = document.getElementById('stream-messages-list');
+            if (messagesList) {
+                messagesList.scrollTop = 0;
+            }
         } catch (e) {
             console.error('Failed to load messages:', e);
             app.showToast(`Failed to load messages: ${e.message}`, 'error');
