@@ -17,6 +17,15 @@ type JetStreamService struct {
 	store    *store.Store
 	executor *executor.Executor
 	mu       sync.RWMutex
+	// Cache for fetched messages
+	messageCache map[string]*CachedMessages
+	cacheMu      sync.RWMutex
+}
+
+type CachedMessages struct {
+	Messages  []StreamMessage
+	Timestamp time.Time
+	Total     uint64
 }
 
 type StreamInfo struct {
@@ -88,8 +97,9 @@ type GetMessagesResponse struct {
 
 func NewJetStreamService(store *store.Store, executor *executor.Executor) *JetStreamService {
 	return &JetStreamService{
-		store:    store,
-		executor: executor,
+		store:        store,
+		executor:     executor,
+		messageCache: make(map[string]*CachedMessages),
 	}
 }
 
@@ -477,5 +487,130 @@ func (s *JetStreamService) GetStreamMessages(req GetMessagesRequest) (*GetMessag
 		StartSeq: firstSeq,
 		EndSeq:   lastSeq,
 		HasMore:  hasMore,
+	}, nil
+}
+
+// FetchAllMessages fetches all messages from a stream using a consumer and caches them
+func (s *JetStreamService) FetchAllMessages(streamName string, cfg natsclient.Config, refresh bool) (*GetMessagesResponse, error) {
+	// Check cache first unless refresh is requested
+	if !refresh {
+		s.cacheMu.RLock()
+		cached, exists := s.messageCache[streamName]
+		s.cacheMu.RUnlock()
+		
+		if exists {
+			return &GetMessagesResponse{
+				Messages: cached.Messages,
+				Total:    cached.Total,
+				StartSeq: cached.Messages[0].Sequence,
+				EndSeq:   cached.Messages[len(cached.Messages)-1].Sequence,
+				HasMore:  false,
+			}, nil
+		}
+	}
+
+	// Get config from store if not provided
+	if cfg.URL == "" {
+		cfg.URL, _ = s.store.GetNatsConfig()
+		if cfg.URL == "" {
+			cfg.URL = "nats://localhost:4222"
+		}
+	}
+	if cfg.CredsPath == "" {
+		_, cfg.CredsPath = s.store.GetNatsConfig()
+	}
+
+	client, err := natsclient.Connect(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect: %w", err)
+	}
+	defer client.Close()
+
+	// Get stream
+	stream, err := client.GetStream(streamName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get stream: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Get stream info
+	info, err := stream.Info(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get stream info: %w", err)
+	}
+
+	if info.State.Msgs == 0 {
+		return &GetMessagesResponse{
+			Messages: []StreamMessage{},
+			Total:    0,
+			StartSeq: 0,
+			EndSeq:   0,
+			HasMore:  false,
+		}, nil
+	}
+
+	// Create a temporary consumer to fetch all messages
+	consumerName := fmt.Sprintf("temp_viewer_%d", time.Now().Unix())
+	consumer, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
+		Name:          consumerName,
+		DeliverPolicy: jetstream.DeliverAllPolicy,
+		AckPolicy:     jetstream.AckNonePolicy,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create consumer: %w", err)
+	}
+
+	// Fetch all messages
+	messages := make([]StreamMessage, 0, info.State.Msgs)
+	fetchCtx, fetchCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer fetchCancel()
+
+	msgBatch, err := consumer.Fetch(int(info.State.Msgs), jetstream.FetchMaxWait(5*time.Second))
+	if err != nil {
+		// Try to clean up consumer
+		stream.DeleteConsumer(ctx, consumerName)
+		return nil, fmt.Errorf("failed to fetch messages: %w", err)
+	}
+
+	for msg := range msgBatch.Messages() {
+		meta, _ := msg.Metadata()
+		messages = append(messages, StreamMessage{
+			Sequence: meta.Sequence.Stream,
+			Subject:  msg.Subject(),
+			Data:     string(msg.Data()),
+			Time:     meta.Timestamp.Format(time.RFC3339),
+			Size:     len(msg.Data()),
+		})
+	}
+
+	// Clean up consumer
+	if err := stream.DeleteConsumer(fetchCtx, consumerName); err != nil {
+		// Log but don't fail - consumer will be deleted eventually
+		fmt.Printf("Warning: failed to delete temporary consumer %s: %v\n", consumerName, err)
+	}
+
+	// Cache the results
+	s.cacheMu.Lock()
+	s.messageCache[streamName] = &CachedMessages{
+		Messages:  messages,
+		Timestamp: time.Now(),
+		Total:     info.State.Msgs,
+	}
+	s.cacheMu.Unlock()
+
+	var startSeq, endSeq uint64
+	if len(messages) > 0 {
+		startSeq = messages[0].Sequence
+		endSeq = messages[len(messages)-1].Sequence
+	}
+
+	return &GetMessagesResponse{
+		Messages: messages,
+		Total:    info.State.Msgs,
+		StartSeq: startSeq,
+		EndSeq:   endSeq,
+		HasMore:  false,
 	}, nil
 }

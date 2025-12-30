@@ -9,7 +9,7 @@
   "nats_profiles": [
     {
       "name": "Default",
-      "url": "nats://localhost:4222",
+      "url": "nats://172.16.8.9:24222",
       "creds_path": ""
     }
   ],

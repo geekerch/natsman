@@ -239,9 +239,10 @@ func (c *Client) GetStreamMessages(streamName string, limit int, startSeq uint64
 		return nil, fmt.Errorf("failed to get stream: %w", err)
 	}
 	
-	// Create a temporary consumer to fetch messages
+	// Create an ephemeral consumer to fetch messages
 	consumerCfg := jetstream.ConsumerConfig{
 		AckPolicy: jetstream.AckNonePolicy,
+		InactiveThreshold: 5 * time.Second, // Auto-delete after 5s of inactivity
 	}
 	
 	// Set start sequence if provided, otherwise start from beginning
@@ -256,6 +257,13 @@ func (c *Client) GetStreamMessages(streamName string, limit int, startSeq uint64
 	if err != nil {
 		return nil, fmt.Errorf("failed to create consumer: %w", err)
 	}
+	
+	// Delete consumer after use
+	defer func() {
+		deleteCtx, deleteCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer deleteCancel()
+		stream.DeleteConsumer(deleteCtx, consumer.CachedInfo().Name)
+	}()
 	
 	// Fetch messages
 	messages := make([]jetstream.Msg, 0, limit)

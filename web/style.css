@@ -1549,6 +1549,10 @@ body {
 }
 
 /* Stream Messages Styles */
+#stream-messages-list {
+    transition: opacity 0.15s ease-in-out;
+}
+
 .message-item {
     background-color: var(--bg-secondary);
     border: 1px solid var(--border-color);

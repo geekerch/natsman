@@ -184,6 +184,9 @@ func (a *App) GetStreamMessages(req service.GetMessagesRequest) (*service.GetMes
 	return a.jsService.GetStreamMessages(req)
 }
 
+func (a *App) FetchAllStreamMessages(streamName string, refresh bool) (*service.GetMessagesResponse, error) {
+	return a.jsService.FetchAllMessages(streamName, natsclient.Config{}, refresh)
+}
 
 func (a *App) CreateJSConsumer(req service.ConsumerCreateRequest) error {
 	return a.jsService.CreateConsumer(req)

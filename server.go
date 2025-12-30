@@ -499,6 +499,20 @@ func SetupRouter(exeDir string, appCfg *AppConfig, configPath string, dataStore 
 
 			c.JSON(http.StatusOK, result)
 		})
+
+		api.GET("/jetstream/streams/:name/messages/all", func(c *gin.Context) {
+			streamName := c.Param("name")
+			refreshStr := c.DefaultQuery("refresh", "false")
+			refresh := refreshStr == "true"
+
+			result, err := jsService.FetchAllMessages(streamName, natsclient.Config{}, refresh)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, result)
+		})
 	}
 
 	return r

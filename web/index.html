@@ -523,17 +523,27 @@
                            style="width: 80px; padding: 6px; background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 4px;">
                     <button class="btn-secondary" id="refresh-stream-messages-btn">Refresh</button>
                     <div id="pagination-controls" style="display: flex; gap: 8px; align-items: center; margin-left: auto;">
-                        <button class="btn-icon-sm prev-page" title="Previous Page">
+                        <button class="btn-icon-sm" id="prev-messages-btn" title="Previous Page">
                             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="7,2 4,6 7,10"/>
                             </svg>
                         </button>
-                        <span class="page-info" style="font-size: 12px; color: var(--text-muted); min-width: 100px; text-align: center;">-</span>
-                        <button class="btn-icon-sm next-page" title="Next Page">
+                        <span class="page-info" id="messages-page-info" style="font-size: 12px; color: var(--text-muted); min-width: 100px; text-align: center;">-</span>
+                        <button class="btn-icon-sm" id="next-messages-btn" title="Next Page">
                             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="5,2 8,6 5,10"/>
                             </svg>
                         </button>
+                        <div style="display: flex; gap: 6px; align-items: center; margin-left: 10px;">
+                            <span style="font-size: 12px; color: var(--text-muted);">Go to:</span>
+                            <input type="number" id="goto-page-input" min="1" 
+                                   style="width: 50px; padding: 4px; background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 4px; font-size: 12px; text-align: center;">
+                            <button class="btn-icon-sm" id="goto-page-btn" title="Go to Page">
+                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="2,6 6,10 10,2"/>
+                                </svg>
+                            </button>
+                        </div>
                         <div style="font-size: 12px; color: var(--text-muted); margin-left: 10px;">
                             Total: <span id="stream-total-messages">0</span>
                         </div>

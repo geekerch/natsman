@@ -313,6 +313,16 @@ const Backend = {
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         return data;
+    },
+
+    async fetchAllStreamMessages(streamName, refresh = false) {
+        if (this.isDesktop()) {
+            return await window.go.main.App.FetchAllStreamMessages(streamName, refresh);
+        }
+        const res = await fetch(API_BASE + `/api/jetstream/streams/${encodeURIComponent(streamName)}/messages/all?refresh=${refresh}`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        return data;
     }
 };
 
@@ -349,7 +359,9 @@ const app = {
         currentStreamName: null,
         currentPage: 1,
         currentStartSeq: 1,
-        currentMessagesResult: null
+        currentMessagesResult: null,
+        loadingMessages: false,
+        allMessages: []
     },
 
     showToast: (message, type = 'info') => {
@@ -1643,40 +1655,105 @@ const app = {
 
     closeStreamMessages: () => {
         document.getElementById('stream-messages-modal').classList.remove('active');
+        
+        // Clear all cached data
         app.state.currentStreamName = null;
         app.state.currentPage = 1;
         app.state.currentStartSeq = 1;
         app.state.currentMessagesResult = null;
+        app.state.cachedMessages = null;
+        
+        // Clear UI
+        const messagesList = document.getElementById('stream-messages-list');
+        if (messagesList) {
+            messagesList.innerHTML = '\n                    <!-- Messages will be rendered here -->\n                ';
+        }
+        
+        console.log('[CloseMessages] Cleared all cached data');
     },
 
-    loadStreamMessages: async (page = null) => {
+    loadStreamMessages: async (refresh = false) => {
         if (!app.state.currentStreamName) return;
-
-        try {
-            const limit = parseInt(document.getElementById('messages-limit').value) || 10;
-            
-            // Calculate start sequence based on page
-            if (page !== null) {
-                app.state.currentPage = page;
-            }
-            
-            const startSeq = app.state.currentStartSeq;
-            const result = await Backend.getStreamMessages(app.state.currentStreamName, limit, startSeq);
-            app.state.currentMessagesResult = result;
-            
-            document.getElementById('stream-total-messages').textContent = result.total || 0;
-            app.renderStreamMessages(result.messages || []);
-            app.updatePaginationControls(result);
-            
-            // Reset scroll position to top
-            const messagesList = document.getElementById('stream-messages-list');
-            if (messagesList) {
-                messagesList.scrollTop = 0;
-            }
-        } catch (e) {
-            console.error('Failed to load messages:', e);
-            app.showToast(`Failed to load messages: ${e.message}`, 'error');
+        
+        // Prevent concurrent requests
+        if (app.state.loadingMessages) {
+            console.log('[LoadMessages] Already loading, skipping...');
+            return;
         }
+        
+        console.log('[LoadMessages] Starting:', {
+            streamName: app.state.currentStreamName,
+            refresh
+        });
+
+        app.state.loadingMessages = true;
+        
+        // Show loading indicator
+        const messagesList = document.getElementById('stream-messages-list');
+        const prevBtn = document.querySelector('#pagination-controls .prev-page');
+        const nextBtn = document.querySelector('#pagination-controls .next-page');
+        const refreshBtn = document.getElementById('refresh-stream-messages-btn');
+        if (prevBtn) prevBtn.disabled = true;
+        if (nextBtn) nextBtn.disabled = true;
+        if (refreshBtn) refreshBtn.disabled = true;
+        if (messagesList) {
+            messagesList.innerHTML = '<div style="text-align: center; padding: 40px; color: #888;"><div style="margin-bottom: 10px;">⏳</div>Loading messages...</div>';
+        }
+        
+        try {
+            console.log('[LoadMessages] Fetching all messages...');
+            
+            const result = await Backend.fetchAllStreamMessages(app.state.currentStreamName, refresh);
+            
+            console.log('[LoadMessages] Got result:', {
+                total: result.total,
+                count: result.messages?.length
+            });
+            
+            app.state.allMessages = result.messages || [];
+            app.state.currentPage = 1;
+            
+            const totalEl = document.getElementById('stream-total-messages');
+            if (totalEl) totalEl.textContent = result.total || 0;
+            app.renderMessagesPage();
+        } catch (e) {
+            console.error('[LoadMessages] ERROR:', e);
+            app.showToast(`Failed to load messages: ${e.message}`, 'error');
+            if (messagesList) {
+                messagesList.innerHTML = '<div style="text-align: center; padding: 40px; color: #888;">Failed to load messages</div>';
+            }
+        } finally {
+            console.log('[LoadMessages] Finally block');
+            app.state.loadingMessages = false;
+            if (refreshBtn) refreshBtn.disabled = false;
+        }
+    },
+
+    renderMessagesPage: () => {
+        const limit = parseInt(document.getElementById('messages-limit').value) || 10;
+        const allMessages = app.state.allMessages || [];
+        const currentPage = app.state.currentPage || 1;
+        
+        const startIdx = (currentPage - 1) * limit;
+        const endIdx = startIdx + limit;
+        const pageMessages = allMessages.slice(startIdx, endIdx);
+        
+        app.renderStreamMessages(pageMessages);
+        
+        // Update pagination controls
+        const prevBtn = document.getElementById('prev-messages-btn');
+        const nextBtn = document.getElementById('next-messages-btn');
+        const totalPages = Math.ceil(allMessages.length / limit);
+        
+        if (prevBtn) {
+            prevBtn.disabled = currentPage <= 1;
+        }
+        if (nextBtn) {
+            nextBtn.disabled = currentPage >= totalPages;
+        }
+        
+        document.getElementById('messages-page-info').textContent = 
+            `Page ${currentPage} of ${totalPages}`;
     },
 
     updatePaginationControls: (result) => {
@@ -1700,32 +1777,59 @@ const app = {
     },
 
     nextPage: async () => {
-        const result = app.state.currentMessagesResult;
-        if (!result || !result.has_more) return;
-        
-        app.state.currentStartSeq = result.end_seq + 1;
-        await app.loadStreamMessages();
+        app.state.currentPage = (app.state.currentPage || 1) + 1;
+        app.renderMessagesPage();
     },
 
     prevPage: async () => {
-        const result = app.state.currentMessagesResult;
-        if (!result || app.state.currentStartSeq <= 1) return;
+        app.state.currentPage = Math.max(1, (app.state.currentPage || 1) - 1);
+        app.renderMessagesPage();
+    },
+
+    gotoPage: () => {
+        const input = document.getElementById('goto-page-input');
+        const pageNum = parseInt(input.value);
+        
+        if (isNaN(pageNum) || pageNum < 1) {
+            app.showToast('Please enter a valid page number', 'error');
+            return;
+        }
         
         const limit = parseInt(document.getElementById('messages-limit').value) || 10;
-        app.state.currentStartSeq = Math.max(1, result.start_seq - limit);
-        await app.loadStreamMessages();
+        const allMessages = app.state.allMessages || [];
+        const totalPages = Math.ceil(allMessages.length / limit);
+        
+        if (pageNum > totalPages) {
+            app.showToast(`Page ${pageNum} doesn't exist. Max page: ${totalPages}`, 'error');
+            return;
+        }
+        
+        app.state.currentPage = pageNum;
+        app.renderMessagesPage();
+        input.value = ''; // Clear input after jump
     },
 
     renderStreamMessages: (messages) => {
         const listEl = document.getElementById('stream-messages-list');
         if (!listEl) return;
 
-        if (messages.length === 0) {
-            listEl.innerHTML = '<p class="empty-state">No messages in stream</p>';
-            return;
-        }
+        console.log('[Render] Rendering messages:', {
+            count: messages.length,
+            sequences: messages.map(m => m.sequence),
+            currentHTML: listEl.innerHTML.substring(0, 100)
+        });
 
-        listEl.innerHTML = messages.map(msg => `
+        // Fade out
+        listEl.style.opacity = '0';
+        
+        setTimeout(() => {
+            if (messages.length === 0) {
+                listEl.innerHTML = '<p class="empty-state">No messages in stream</p>';
+                listEl.style.opacity = '1';
+                return;
+            }
+
+            listEl.innerHTML = messages.map(msg => `
             <div class="message-item">
                 <div class="message-header">
                     <span class="message-seq">#${msg.sequence}</span>
@@ -1738,6 +1842,13 @@ const app = {
                 </div>
             </div>
         `).join('');
+        
+            // Fade in
+            listEl.style.opacity = '1';
+        }, 150);
+        
+        console.log('[Render] After render, first message seq:', 
+            listEl.querySelector('.message-seq')?.textContent);
     },
 
     switchJSTab: (tabName) => {
@@ -2295,13 +2406,22 @@ const app = {
             document.querySelector('#stream-messages-modal .modal-backdrop').onclick = app.closeStreamMessages;
             
             const refreshMessagesBtn = document.getElementById('refresh-stream-messages-btn');
-            if (refreshMessagesBtn) refreshMessagesBtn.onclick = app.loadStreamMessages;
+            if (refreshMessagesBtn) refreshMessagesBtn.onclick = () => app.loadStreamMessages(true);
 
             // Pagination controls
-            const prevPageBtn = document.querySelector('#pagination-controls .prev-page');
-            const nextPageBtn = document.querySelector('#pagination-controls .next-page');
+            const prevPageBtn = document.getElementById('prev-messages-btn');
+            const nextPageBtn = document.getElementById('next-messages-btn');
+            const gotoPageBtn = document.getElementById('goto-page-btn');
+            const gotoPageInput = document.getElementById('goto-page-input');
+            
             if (prevPageBtn) prevPageBtn.onclick = app.prevPage;
             if (nextPageBtn) nextPageBtn.onclick = app.nextPage;
+            if (gotoPageBtn) gotoPageBtn.onclick = app.gotoPage;
+            if (gotoPageInput) {
+                gotoPageInput.onkeypress = (e) => {
+                    if (e.key === 'Enter') app.gotoPage();
+                };
+            }
 
             console.log('[SetupEvents] Finished setupEventListeners');
         } catch (e) {
