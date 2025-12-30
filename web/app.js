@@ -79,6 +79,27 @@ const Backend = {
         await fetch(`${API_BASE}/api/profiles/nats/${name}`, { method: 'DELETE' });
     },
 
+    // JS Extensions
+    async getJSExtensions() {
+        if (this.isDesktop()) {
+            return {
+                available: await window.go.main.App.ListJSExtensions(),
+                active: await window.go.main.App.GetActiveJSExtensions()
+            };
+        }
+        const res = await fetch(API_BASE + '/api/extensions');
+        return await res.json();
+    },
+
+    async setActiveJSExtensions(extensions) {
+        if (this.isDesktop()) return await window.go.main.App.SetActiveJSExtensions(extensions);
+        await fetch(API_BASE + '/api/extensions/activate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ extensions })
+        });
+    },
+
     // Tree / Templates
     async getTree() {
         if (this.isDesktop()) return await window.go.main.App.GetTree();
@@ -414,6 +435,9 @@ const app = {
         activeGlobalsProfile: '',
         natsProfiles: [],
         activeNatsProfile: '',
+        // JS Extensions
+        availableExtensions: [],
+        activeExtensions: [],
         // Pub/Sub
         mode: 'request', // 'request', 'pubsub', or 'jetstream'
         activeSubscriptions: [],
@@ -2378,6 +2402,74 @@ const app = {
         }
     },
 
+    // JS Extensions Management
+    openExtensions: async () => {
+        document.getElementById('extensions-modal').classList.add('active');
+        await app.loadExtensions();
+    },
+
+    closeExtensions: () => {
+        document.getElementById('extensions-modal').classList.remove('active');
+    },
+
+    loadExtensions: async () => {
+        try {
+            const data = await Backend.getJSExtensions();
+            app.state.availableExtensions = data.available || [];
+            app.state.activeExtensions = data.active || [];
+            app.renderExtensions();
+        } catch (e) {
+            console.error('Failed to load extensions:', e);
+            app.showToast('Failed to load extensions');
+        }
+    },
+
+    renderExtensions: () => {
+        const container = document.getElementById('extensions-list');
+        container.innerHTML = '';
+
+        if (app.state.availableExtensions.length === 0) {
+            container.innerHTML = `
+                <div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 12px;">
+                    No JavaScript extensions found. Place .js files in the extensions directory.
+                </div>
+            `;
+            return;
+        }
+
+        app.state.availableExtensions.forEach(filename => {
+            const isActive = app.state.activeExtensions.includes(filename);
+            const item = document.createElement('label');
+            item.className = 'extension-item';
+            item.style.cssText = 'display: flex; align-items: center; padding: 10px; background: var(--bg-secondary); border-radius: 4px; cursor: pointer;';
+            
+            item.innerHTML = `
+                <input type="checkbox" ${isActive ? 'checked' : ''} data-filename="${filename}" 
+                    style="margin-right: 10px; cursor: pointer;">
+                <span style="font-family: var(--font-mono); font-size: 12px;">${filename}</span>
+            `;
+            
+            container.appendChild(item);
+        });
+    },
+
+    saveExtensions: async () => {
+        const checkboxes = document.querySelectorAll('#extensions-list input[type="checkbox"]');
+        const activeExtensions = Array.from(checkboxes)
+            .filter(cb => cb.checked)
+            .map(cb => cb.dataset.filename);
+
+        try {
+            await Backend.setActiveJSExtensions(activeExtensions);
+            app.state.activeExtensions = activeExtensions;
+            app.closeExtensions();
+            app.showToast('Extensions saved');
+        } catch (e) {
+            console.error('Failed to save extensions:', e);
+            app.showToast('Failed to save extensions');
+        }
+    },
+
     renderNatsProfileSelector: () => {
         const select = document.getElementById('nats-profile-select');
         select.innerHTML = '';
@@ -2591,6 +2683,13 @@ const app = {
             document.getElementById('add-global-btn').onclick = app.addGlobalVar;
             document.getElementById('save-globals-btn').onclick = app.saveGlobals;
             document.querySelector('#globals-modal .modal-backdrop').onclick = app.closeGlobals;
+
+            // Extensions Modal
+            document.getElementById('extensions-btn').onclick = app.openExtensions;
+            document.querySelector('#extensions-close').onclick = app.closeExtensions;
+            document.getElementById('cancel-extensions-btn').onclick = app.closeExtensions;
+            document.getElementById('save-extensions-btn').onclick = app.saveExtensions;
+            document.querySelector('#extensions-modal .modal-backdrop').onclick = app.closeExtensions;
 
             // Mode Selection
             const modeSelect = document.getElementById('mode-select');

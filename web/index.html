@@ -88,6 +88,14 @@
                     </svg>
                     <span>Globals</span>
                 </button>
+                <button class="sidebar-action-btn" id="extensions-btn" title="JS Extensions">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor"
+                        stroke-width="1.5">
+                        <path d="M4 2h10a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V4a2 2 0 012-2z" />
+                        <path d="M6 6h6M6 9h6M6 12h3" />
+                    </svg>
+                    <span>Extensions</span>
+                </button>
                 <button class="sidebar-action-btn" id="settings-btn" title="Settings">
                     <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor"
                         stroke-width="1.5">
@@ -331,6 +339,34 @@
             <div class="modal-footer">
                 <button class="btn-secondary" id="cancel-globals-btn">Cancel</button>
                 <button class="btn-primary" id="save-globals-btn">Save Profile</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JS Extensions Modal -->
+    <div class="modal" id="extensions-modal">
+        <div class="modal-backdrop"></div>
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h2 class="modal-title">JavaScript Extensions</h2>
+                <button class="modal-close" id="extensions-close">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="4" y1="4" x2="14" y2="14" />
+                        <line x1="14" y1="4" x2="4" y2="14" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 12px;">
+                    Select JavaScript files to extend variable functionality. Place .js files in the extensions directory.
+                </p>
+                <div id="extensions-list" style="display: flex; flex-direction: column; gap: 8px;">
+                    <!-- Extensions list will be populated here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="cancel-extensions-btn">Cancel</button>
+                <button class="btn-primary" id="save-extensions-btn">Save</button>
             </div>
         </div>
     </div>

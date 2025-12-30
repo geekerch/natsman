@@ -2,6 +2,8 @@ package executor
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/dop251/goja"
@@ -10,21 +12,69 @@ import (
 
 // Executor provides a sandboxed JavaScript runtime for evaluating dynamic variables
 type Executor struct {
-	timeout time.Duration
+	timeout        time.Duration
+	extensionsDir  string
+	loadedExtensions map[string]string
 }
 
 // New creates a new Executor with default 1 second timeout
 func New() *Executor {
 	return &Executor{
-		timeout: 1 * time.Second,
+		timeout:          1 * time.Second,
+		loadedExtensions: make(map[string]string),
 	}
 }
 
 // NewWithTimeout creates a new Executor with custom timeout
 func NewWithTimeout(timeout time.Duration) *Executor {
 	return &Executor{
-		timeout: timeout,
+		timeout:          timeout,
+		loadedExtensions: make(map[string]string),
 	}
+}
+
+// NewWithExtensions creates a new Executor with extensions directory
+func NewWithExtensions(extensionsDir string) *Executor {
+	return &Executor{
+		timeout:          1 * time.Second,
+		extensionsDir:    extensionsDir,
+		loadedExtensions: make(map[string]string),
+	}
+}
+
+// LoadExtension loads a JavaScript extension file
+func (e *Executor) LoadExtension(filename string) error {
+	var fullPath string
+	
+	if filepath.IsAbs(filename) {
+		fullPath = filename
+	} else if e.extensionsDir != "" {
+		fullPath = filepath.Join(e.extensionsDir, filename)
+	} else {
+		return fmt.Errorf("no extensions directory set and path is not absolute")
+	}
+	
+	content, err := os.ReadFile(fullPath)
+	if err != nil {
+		return fmt.Errorf("failed to read extension file: %w", err)
+	}
+	
+	e.loadedExtensions[filename] = string(content)
+	return nil
+}
+
+// SetExtensionsDir sets the extensions directory path
+func (e *Executor) SetExtensionsDir(dir string) {
+	e.extensionsDir = dir
+}
+
+// GetLoadedExtensions returns list of loaded extension filenames
+func (e *Executor) GetLoadedExtensions() []string {
+	extensions := make([]string, 0, len(e.loadedExtensions))
+	for name := range e.loadedExtensions {
+		extensions = append(extensions, name)
+	}
+	return extensions
 }
 
 // Eval evaluates a JavaScript expression and returns the result as a string
@@ -48,6 +98,13 @@ func (e *Executor) Eval(script string) (string, error) {
 	// Register built-in helper functions
 	if err := e.registerHelpers(vm); err != nil {
 		return "", fmt.Errorf("failed to register helpers: %w", err)
+	}
+
+	// Load all extensions into VM
+	for filename, content := range e.loadedExtensions {
+		if _, err := vm.RunString(content); err != nil {
+			return "", fmt.Errorf("failed to load extension '%s': %w", filename, err)
+		}
 	}
 
 	// Execute the script

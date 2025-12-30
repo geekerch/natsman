@@ -56,8 +56,9 @@ func main() {
 		log.Fatalf("Failed to initialize store: %v", err)
 	}
 
-	// Initialize executor
+	// Initialize executor with extensions directory
 	exec = executor.New()
+	exec.SetExtensionsDir(dataStore.GetExtensionsDir())
 
 	// Initialize Request Service
 	reqService := service.NewRequestService(dataStore, exec)
