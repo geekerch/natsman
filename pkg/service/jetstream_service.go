@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"natsman/pkg/executor"
 	"natsman/pkg/natsclient"
 	"natsman/pkg/store"
 
@@ -13,8 +14,9 @@ import (
 )
 
 type JetStreamService struct {
-	store *store.Store
-	mu    sync.RWMutex
+	store    *store.Store
+	executor *executor.Executor
+	mu       sync.RWMutex
 }
 
 type StreamInfo struct {
@@ -49,10 +51,10 @@ type ConsumerCreateRequest struct {
 }
 
 type JSPublishRequest struct {
-	Subject   string                `json:"subject"`
-	Body      string                `json:"body"`
-	Variables map[string]string     `json:"variables"`
-	Config    natsclient.Config     `json:"config"`
+	Subject   string                    `json:"subject"`
+	Body      string                    `json:"body"`
+	Variables map[string]store.Variable `json:"variables"`
+	Config    natsclient.Config         `json:"config"`
 }
 
 type JSPublishResponse struct {
@@ -61,9 +63,10 @@ type JSPublishResponse struct {
 	Status   string `json:"status"`
 }
 
-func NewJetStreamService(store *store.Store) *JetStreamService {
+func NewJetStreamService(store *store.Store, executor *executor.Executor) *JetStreamService {
 	return &JetStreamService{
-		store: store,
+		store:    store,
+		executor: executor,
 	}
 }
 
@@ -230,12 +233,45 @@ func (s *JetStreamService) PublishToJetStream(req JSPublishRequest) (*JSPublishR
 	}
 	defer client.Close()
 
-	// Parse variables in subject and body (similar to request_service)
-	subject := req.Subject
-	body := req.Body
-	
-	// TODO: Apply variable substitution if needed
-	// For now, just use the values as-is
+	// Process variables (same as request_service)
+	globalVars := s.store.GetGlobalVars()
+	finalVars := make(map[string]string)
+
+	evaluateVar := func(key string, v store.Variable) (string, error) {
+		if v.Type == "dynamic" {
+			return s.executor.Eval(v.Value)
+		}
+		return v.Value, nil
+	}
+
+	// 1. Process Global Variables
+	for k, v := range globalVars {
+		val, err := evaluateVar(k, v)
+		if err != nil {
+			return nil, fmt.Errorf("global variable '%s' error: %v", k, err)
+		}
+		finalVars[k] = val
+	}
+
+	// 2. Process Local Variables (Override globals)
+	for k, v := range req.Variables {
+		val, err := evaluateVar(k, v)
+		if err != nil {
+			return nil, fmt.Errorf("local variable '%s' error: %v", k, err)
+		}
+		finalVars[k] = val
+	}
+
+	// 3. Apply template substitution
+	subject, err := ProcessTemplate(req.Subject, finalVars)
+	if err != nil {
+		return nil, fmt.Errorf("subject template error: %w", err)
+	}
+
+	body, err := ProcessTemplate(req.Body, finalVars)
+	if err != nil {
+		return nil, fmt.Errorf("body template error: %w", err)
+	}
 
 	ack, err := client.JSPublish(subject, []byte(body))
 	if err != nil {

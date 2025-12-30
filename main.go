@@ -66,7 +66,7 @@ func main() {
 	subService := service.NewSubscribeService(dataStore)
 
 	// Initialize JetStream Service
-	jsService := service.NewJetStreamService(dataStore)
+	jsService := service.NewJetStreamService(dataStore, exec)
 
 	// Initialize Wails App Adapter (RPC Layer)
 	app := NewApp(dataStore, reqService, subService, jsService)
