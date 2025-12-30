@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 type Config struct {
@@ -14,6 +15,7 @@ type Config struct {
 
 type Client struct {
 	nc *nats.Conn
+	js jetstream.JetStream
 }
 
 func Connect(cfg Config) (*Client, error) {
@@ -33,7 +35,14 @@ func Connect(cfg Config) (*Client, error) {
 		return nil, fmt.Errorf("failed to connect to NATS: %w", err)
 	}
 
-	return &Client{nc: nc}, nil
+	// Initialize JetStream
+	js, err := jetstream.New(nc)
+	if err != nil {
+		nc.Close()
+		return nil, fmt.Errorf("failed to initialize JetStream: %w", err)
+	}
+
+	return &Client{nc: nc, js: js}, nil
 }
 
 func (c *Client) Close() {
@@ -93,3 +102,98 @@ func (c *Client) Drain() error {
 	}
 	return nil
 }
+
+// JetStream methods
+
+func (c *Client) JetStream() jetstream.JetStream {
+	return c.js
+}
+
+// CreateStream creates a JetStream stream
+func (c *Client) CreateStream(cfg jetstream.StreamConfig) (jetstream.Stream, error) {
+	if c.js == nil {
+		return nil, fmt.Errorf("JetStream not initialized")
+	}
+	return c.js.CreateStream(nil, cfg)
+}
+
+// GetStream retrieves a stream by name
+func (c *Client) GetStream(name string) (jetstream.Stream, error) {
+	if c.js == nil {
+		return nil, fmt.Errorf("JetStream not initialized")
+	}
+	return c.js.Stream(nil, name)
+}
+
+// DeleteStream deletes a stream
+func (c *Client) DeleteStream(name string) error {
+	if c.js == nil {
+		return fmt.Errorf("JetStream not initialized")
+	}
+	return c.js.DeleteStream(nil, name)
+}
+
+// ListStreams lists all streams
+func (c *Client) ListStreams() []string {
+	if c.js == nil {
+		return nil
+	}
+	
+	var names []string
+	streams := c.js.ListStreams(nil)
+	for stream := range streams.Info() {
+		names = append(names, stream.Config.Name)
+	}
+	return names
+}
+
+// JSPublish publishes a message to JetStream
+func (c *Client) JSPublish(subject string, data []byte) (*jetstream.PubAck, error) {
+	if c.js == nil {
+		return nil, fmt.Errorf("JetStream not initialized")
+	}
+	return c.js.Publish(nil, subject, data)
+}
+
+// CreateConsumer creates a JetStream consumer
+func (c *Client) CreateConsumer(streamName string, cfg jetstream.ConsumerConfig) (jetstream.Consumer, error) {
+	if c.js == nil {
+		return nil, fmt.Errorf("JetStream not initialized")
+	}
+	
+	stream, err := c.js.Stream(nil, streamName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get stream: %w", err)
+	}
+	
+	return stream.CreateConsumer(nil, cfg)
+}
+
+// GetConsumer retrieves a consumer
+func (c *Client) GetConsumer(streamName, consumerName string) (jetstream.Consumer, error) {
+	if c.js == nil {
+		return nil, fmt.Errorf("JetStream not initialized")
+	}
+	
+	stream, err := c.js.Stream(nil, streamName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get stream: %w", err)
+	}
+	
+	return stream.Consumer(nil, consumerName)
+}
+
+// DeleteConsumer deletes a consumer
+func (c *Client) DeleteConsumer(streamName, consumerName string) error {
+	if c.js == nil {
+		return fmt.Errorf("JetStream not initialized")
+	}
+	
+	stream, err := c.js.Stream(nil, streamName)
+	if err != nil {
+		return fmt.Errorf("failed to get stream: %w", err)
+	}
+	
+	return stream.DeleteConsumer(nil, consumerName)
+}
+

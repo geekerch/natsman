@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"natsman/pkg/natsclient"
 	"natsman/pkg/service"
 	"natsman/pkg/store"
 )
@@ -13,14 +14,16 @@ type App struct {
 	store      *store.Store
 	service    *service.RequestService
 	subService *service.SubscribeService
+	jsService  *service.JetStreamService
 }
 
 // NewApp creates a new App application struct
-func NewApp(store *store.Store, service *service.RequestService, subService *service.SubscribeService) *App {
+func NewApp(store *store.Store, service *service.RequestService, subService *service.SubscribeService, jsService *service.JetStreamService) *App {
 	return &App{
 		store:      store,
 		service:    service,
 		subService: subService,
+		jsService:  jsService,
 	}
 }
 
@@ -150,6 +153,40 @@ func (a *App) GetActiveSubscriptions() []string {
 
 func (a *App) ClearSubscriptionMessages(subject string) error {
 	return a.subService.ClearMessages(subject)
+}
+
+// --- JetStream Methods ---
+
+func (a *App) CreateJSStream(req service.StreamCreateRequest) error {
+	return a.jsService.CreateStream(req)
+}
+
+func (a *App) ListJSStreams() ([]string, error) {
+	cfg := natsclient.Config{}
+	return a.jsService.ListStreams(cfg)
+}
+
+func (a *App) GetJSStreamInfo(streamName string) (*service.StreamInfo, error) {
+	cfg := natsclient.Config{}
+	return a.jsService.GetStreamInfo(streamName, cfg)
+}
+
+func (a *App) DeleteJSStream(streamName string) error {
+	cfg := natsclient.Config{}
+	return a.jsService.DeleteStream(streamName, cfg)
+}
+
+func (a *App) JSPublish(req service.JSPublishRequest) (*service.JSPublishResponse, error) {
+	return a.jsService.PublishToJetStream(req)
+}
+
+func (a *App) CreateJSConsumer(req service.ConsumerCreateRequest) error {
+	return a.jsService.CreateConsumer(req)
+}
+
+func (a *App) DeleteJSConsumer(streamName, consumerName string) error {
+	cfg := natsclient.Config{}
+	return a.jsService.DeleteConsumer(streamName, consumerName, cfg)
 }
 
 // Simple test method

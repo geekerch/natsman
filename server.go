@@ -16,7 +16,7 @@ import (
 )
 
 // SetupRouter initializes the Gin engine and defines all API routes
-func SetupRouter(exeDir string, appCfg *AppConfig, configPath string, dataStore *store.Store, reqService *service.RequestService, subService *service.SubscribeService, embeddedFS embed.FS) *gin.Engine {
+func SetupRouter(exeDir string, appCfg *AppConfig, configPath string, dataStore *store.Store, reqService *service.RequestService, subService *service.SubscribeService, jsService *service.JetStreamService, embeddedFS embed.FS) *gin.Engine {
 	// Setup Gin
 	r := gin.New() // Use New() to avoid default Logger causing double logging potentially
 	r.Use(gin.Recovery())
@@ -387,6 +387,91 @@ func SetupRouter(exeDir string, appCfg *AppConfig, configPath string, dataStore 
 				return
 			}
 			c.JSON(http.StatusOK, gin.H{"status": "cleared"})
+		})
+
+		// JetStream endpoints
+		api.POST("/jetstream/streams", func(c *gin.Context) {
+			var req service.StreamCreateRequest
+			if err := c.BindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+
+			if err := jsService.CreateStream(req); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{"status": "created", "stream": req.Name})
+		})
+
+		api.GET("/jetstream/streams", func(c *gin.Context) {
+			streams, err := jsService.ListStreams(natsclient.Config{})
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"streams": streams})
+		})
+
+		api.GET("/jetstream/streams/:name", func(c *gin.Context) {
+			name := c.Param("name")
+			info, err := jsService.GetStreamInfo(name, natsclient.Config{})
+			if err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, info)
+		})
+
+		api.DELETE("/jetstream/streams/:name", func(c *gin.Context) {
+			name := c.Param("name")
+			if err := jsService.DeleteStream(name, natsclient.Config{}); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"status": "deleted"})
+		})
+
+		api.POST("/jetstream/publish", func(c *gin.Context) {
+			var req service.JSPublishRequest
+			if err := c.BindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+
+			result, err := jsService.PublishToJetStream(req)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, result)
+		})
+
+		api.POST("/jetstream/consumers", func(c *gin.Context) {
+			var req service.ConsumerCreateRequest
+			if err := c.BindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+
+			if err := jsService.CreateConsumer(req); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{"status": "created", "consumer": req.Name})
+		})
+
+		api.DELETE("/jetstream/consumers/:stream/:consumer", func(c *gin.Context) {
+			streamName := c.Param("stream")
+			consumerName := c.Param("consumer")
+			if err := jsService.DeleteConsumer(streamName, consumerName, natsclient.Config{}); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"status": "deleted"})
 		})
 	}
 

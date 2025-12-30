@@ -65,11 +65,14 @@ func main() {
 	// Initialize Subscribe Service
 	subService := service.NewSubscribeService(dataStore)
 
+	// Initialize JetStream Service
+	jsService := service.NewJetStreamService(dataStore)
+
 	// Initialize Wails App Adapter (RPC Layer)
-	app := NewApp(dataStore, reqService, subService)
+	app := NewApp(dataStore, reqService, subService, jsService)
 
 	// Setup Router
-	r := SetupRouter(exeDir, appCfg, configPath, dataStore, reqService, subService, embeddedFS)
+	r := SetupRouter(exeDir, appCfg, configPath, dataStore, reqService, subService, jsService, embeddedFS)
 
 	// Mode Handling via StartApp (implementation depends on build tags)
 	webFS, err := fs.Sub(embeddedFS, "web")
