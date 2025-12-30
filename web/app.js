@@ -300,15 +300,16 @@ const Backend = {
         return data;
     },
 
-    async getStreamMessages(streamName, limit = 10) {
+    async getStreamMessages(streamName, limit = 10, startSeq = 1) {
         if (this.isDesktop()) {
             return await window.go.main.App.GetStreamMessages({
                 stream_name: streamName,
                 limit: limit,
+                start_seq: startSeq,
                 config: {}
             });
         }
-        const res = await fetch(API_BASE + `/api/jetstream/streams/${encodeURIComponent(streamName)}/messages?limit=${limit}`);
+        const res = await fetch(API_BASE + `/api/jetstream/streams/${encodeURIComponent(streamName)}/messages?limit=${limit}&start_seq=${startSeq}`);
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         return data;
@@ -345,7 +346,10 @@ const app = {
         // JetStream
         jsStreams: [],
         jsSelectedStream: null,
-        currentStreamName: null
+        currentStreamName: null,
+        currentPage: 1,
+        currentStartSeq: 1,
+        currentMessagesResult: null
     },
 
     showToast: (message, type = 'info') => {
@@ -1629,6 +1633,9 @@ const app = {
 
     openStreamMessages: async (streamName) => {
         app.state.currentStreamName = streamName;
+        app.state.currentPage = 1;
+        app.state.currentStartSeq = 1;
+        app.state.currentMessagesResult = null;
         document.getElementById('stream-messages-title').textContent = streamName;
         document.getElementById('stream-messages-modal').classList.add('active');
         await app.loadStreamMessages();
@@ -1637,21 +1644,71 @@ const app = {
     closeStreamMessages: () => {
         document.getElementById('stream-messages-modal').classList.remove('active');
         app.state.currentStreamName = null;
+        app.state.currentPage = 1;
+        app.state.currentStartSeq = 1;
+        app.state.currentMessagesResult = null;
     },
 
-    loadStreamMessages: async () => {
+    loadStreamMessages: async (page = null) => {
         if (!app.state.currentStreamName) return;
 
         try {
             const limit = parseInt(document.getElementById('messages-limit').value) || 10;
-            const result = await Backend.getStreamMessages(app.state.currentStreamName, limit);
+            
+            // Calculate start sequence based on page
+            if (page !== null) {
+                app.state.currentPage = page;
+            }
+            
+            const startSeq = app.state.currentStartSeq;
+            
+            const result = await Backend.getStreamMessages(app.state.currentStreamName, limit, startSeq);
+            app.state.currentMessagesResult = result;
             
             document.getElementById('stream-total-messages').textContent = result.total || 0;
             app.renderStreamMessages(result.messages || []);
+            app.updatePaginationControls(result);
         } catch (e) {
             console.error('Failed to load messages:', e);
             app.showToast(`Failed to load messages: ${e.message}`, 'error');
         }
+    },
+
+    updatePaginationControls: (result) => {
+        const paginationEl = document.getElementById('pagination-controls');
+        if (!paginationEl) return;
+
+        const prevBtn = paginationEl.querySelector('.prev-page');
+        const nextBtn = paginationEl.querySelector('.next-page');
+        const pageInfo = paginationEl.querySelector('.page-info');
+
+        // Update buttons state
+        if (prevBtn) prevBtn.disabled = app.state.currentStartSeq <= 1;
+        if (nextBtn) nextBtn.disabled = !result.has_more;
+
+        // Update page info
+        if (pageInfo && result.messages && result.messages.length > 0) {
+            pageInfo.textContent = `Seq ${result.start_seq} - ${result.end_seq}`;
+        } else if (pageInfo) {
+            pageInfo.textContent = 'No messages';
+        }
+    },
+
+    nextPage: async () => {
+        const result = app.state.currentMessagesResult;
+        if (!result || !result.has_more) return;
+        
+        app.state.currentStartSeq = result.end_seq + 1;
+        await app.loadStreamMessages();
+    },
+
+    prevPage: async () => {
+        const result = app.state.currentMessagesResult;
+        if (!result || app.state.currentStartSeq <= 1) return;
+        
+        const limit = parseInt(document.getElementById('messages-limit').value) || 10;
+        app.state.currentStartSeq = Math.max(1, result.start_seq - limit);
+        await app.loadStreamMessages();
     },
 
     renderStreamMessages: (messages) => {
@@ -2234,6 +2291,12 @@ const app = {
             
             const refreshMessagesBtn = document.getElementById('refresh-stream-messages-btn');
             if (refreshMessagesBtn) refreshMessagesBtn.onclick = app.loadStreamMessages;
+
+            // Pagination controls
+            const prevPageBtn = document.querySelector('#pagination-controls .prev-page');
+            const nextPageBtn = document.querySelector('#pagination-controls .next-page');
+            if (prevPageBtn) prevPageBtn.onclick = app.prevPage;
+            if (nextPageBtn) nextPageBtn.onclick = app.nextPage;
 
             console.log('[SetupEvents] Finished setupEventListeners');
         } catch (e) {

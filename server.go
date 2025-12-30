@@ -480,10 +480,14 @@ func SetupRouter(exeDir string, appCfg *AppConfig, configPath string, dataStore 
 			streamName := c.Param("name")
 			limitStr := c.DefaultQuery("limit", "10")
 			limit, _ := strconv.Atoi(limitStr)
+			
+			startSeqStr := c.DefaultQuery("start_seq", "1")
+			startSeq, _ := strconv.ParseUint(startSeqStr, 10, 64)
 
 			req := service.GetMessagesRequest{
 				StreamName: streamName,
 				Limit:      limit,
+				StartSeq:   startSeq,
 				Config:     natsclient.Config{},
 			}
 

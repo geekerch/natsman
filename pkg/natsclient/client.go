@@ -218,8 +218,8 @@ func (c *Client) DeleteConsumer(streamName, consumerName string) error {
 	return stream.DeleteConsumer(ctx, consumerName)
 }
 
-// GetStreamMessages retrieves messages from a stream
-func (c *Client) GetStreamMessages(streamName string, limit int) ([]jetstream.Msg, error) {
+// GetStreamMessages retrieves messages from a stream starting from a specific sequence
+func (c *Client) GetStreamMessages(streamName string, limit int, startSeq uint64) ([]jetstream.Msg, error) {
 	if c.js == nil {
 		return nil, fmt.Errorf("JetStream not initialized")
 	}
@@ -241,8 +241,15 @@ func (c *Client) GetStreamMessages(streamName string, limit int) ([]jetstream.Ms
 	
 	// Create a temporary consumer to fetch messages
 	consumerCfg := jetstream.ConsumerConfig{
-		DeliverPolicy: jetstream.DeliverAllPolicy,
-		AckPolicy:     jetstream.AckNonePolicy,
+		AckPolicy: jetstream.AckNonePolicy,
+	}
+	
+	// Set start sequence if provided, otherwise start from beginning
+	if startSeq > 0 {
+		consumerCfg.DeliverPolicy = jetstream.DeliverByStartSequencePolicy
+		consumerCfg.OptStartSeq = startSeq
+	} else {
+		consumerCfg.DeliverPolicy = jetstream.DeliverAllPolicy
 	}
 	
 	consumer, err := stream.CreateOrUpdateConsumer(ctx, consumerCfg)

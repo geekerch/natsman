@@ -74,12 +74,16 @@ type StreamMessage struct {
 type GetMessagesRequest struct {
 	StreamName string            `json:"stream_name"`
 	Limit      int               `json:"limit"`
+	StartSeq   uint64            `json:"start_seq"` // Start from this sequence (for pagination)
 	Config     natsclient.Config `json:"config"`
 }
 
 type GetMessagesResponse struct {
-	Messages []StreamMessage `json:"messages"`
-	Total    uint64          `json:"total"`
+	Messages   []StreamMessage `json:"messages"`
+	Total      uint64          `json:"total"`
+	StartSeq   uint64          `json:"start_seq"`
+	EndSeq     uint64          `json:"end_seq"`
+	HasMore    bool            `json:"has_more"`
 }
 
 func NewJetStreamService(store *store.Store, executor *executor.Executor) *JetStreamService {
@@ -431,17 +435,29 @@ func (s *JetStreamService) GetStreamMessages(req GetMessagesRequest) (*GetMessag
 		limit = 10
 	}
 
-	msgs, err := client.GetStreamMessages(req.StreamName, limit)
+	// Determine start sequence
+	startSeq := req.StartSeq
+	if startSeq == 0 {
+		startSeq = 1 // Start from first message if not specified
+	}
+
+	msgs, err := client.GetStreamMessages(req.StreamName, limit, startSeq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get messages: %w", err)
 	}
 
 	// Convert to response format
 	messages := make([]StreamMessage, 0, len(msgs))
-	for _, msg := range msgs {
+	var firstSeq, lastSeq uint64
+	for i, msg := range msgs {
 		meta, _ := msg.Metadata()
+		seq := meta.Sequence.Stream
+		if i == 0 {
+			firstSeq = seq
+		}
+		lastSeq = seq
 		messages = append(messages, StreamMessage{
-			Sequence: meta.Sequence.Stream,
+			Sequence: seq,
 			Subject:  msg.Subject(),
 			Data:     string(msg.Data()),
 			Time:     meta.Timestamp.Format(time.RFC3339),
@@ -449,8 +465,17 @@ func (s *JetStreamService) GetStreamMessages(req GetMessagesRequest) (*GetMessag
 		})
 	}
 
+	// Determine if there are more messages
+	hasMore := false
+	if len(messages) > 0 && lastSeq < info.State.LastSeq {
+		hasMore = true
+	}
+
 	return &GetMessagesResponse{
 		Messages: messages,
 		Total:    info.State.Msgs,
+		StartSeq: firstSeq,
+		EndSeq:   lastSeq,
+		HasMore:  hasMore,
 	}, nil
 }
