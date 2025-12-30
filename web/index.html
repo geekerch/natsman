@@ -47,6 +47,18 @@
             </div>
 
             <div class="sidebar-footer">
+                <button class="sidebar-action-btn" id="subscriptions-btn" title="Active Subscriptions">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor"
+                        stroke-width="1.5">
+                        <circle cx="9" cy="4" r="2" />
+                        <circle cx="9" cy="14" r="2" />
+                        <circle cx="4" cy="9" r="2" />
+                        <circle cx="14" cy="9" r="2" />
+                        <line x1="6" y1="9" x2="12" y2="9" />
+                        <line x1="9" y1="6" x2="9" y2="12" />
+                    </svg>
+                    <span>Subscriptions</span>
+                </button>
                 <button class="sidebar-action-btn" id="globals-btn" title="Global Variables">
                     <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor"
                         stroke-width="1.5">
@@ -110,6 +122,14 @@
                     <!-- Request Tab -->
                     <div class="tab-pane active" data-pane="request">
                         <div class="config-row">
+                            <label class="config-label">Mode</label>
+                            <select id="mode-select" class="mode-select">
+                                <option value="request">Request/Reply</option>
+                                <option value="pubsub">Publish</option>
+                            </select>
+                        </div>
+
+                        <div class="config-row">
                             <label class="config-label">Subject</label>
                             <input type="text" id="subject-input" class="subject-input"
                                 placeholder="service.action.{{.id}}" />
@@ -140,7 +160,13 @@
                             <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
                                 <path d="M1 8l16-7-6 16-3-9-7 0z" />
                             </svg>
-                            Send Request
+                            <span id="send-btn-text">Send Request</span>
+                        </button>
+                        <button class="btn-subscribe" id="subscribe-btn" style="display: none;">
+                            <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
+                                <path d="M2 7h14v2H2zM7 2h4v14H7z"/>
+                            </svg>
+                            <span>Subscribe</span>
                         </button>
                     </div>
                 </div>
@@ -306,6 +332,72 @@
             <div class="modal-footer">
                 <button class="btn-secondary" id="confirm-cancel-btn">Cancel</button>
                 <button class="btn-primary" id="confirm-ok-btn">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Subscriptions Modal -->
+    <div class="modal" id="subscriptions-modal">
+        <div class="modal-backdrop"></div>
+        <div class="modal-dialog modal-lg">
+            <div class="modal-header">
+                <h2 class="modal-title">Active Subscriptions</h2>
+                <button class="modal-close" id="subscriptions-close">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="4" y1="4" x2="14" y2="14" />
+                        <line x1="14" y1="4" x2="4" y2="14" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="subscriptions-container">
+                    <div class="subscriptions-list-wrapper">
+                        <div class="subscription-input-section">
+                            <h3 class="section-title">New Subscription</h3>
+                            <div class="input-group">
+                                <input type="text" id="new-subscription-subject" class="form-input" 
+                                       placeholder="Subject (e.g., events.test)" />
+                                <button class="btn-primary btn-sm" id="add-subscription-btn">
+                                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="6" y1="1" x2="6" y2="11" />
+                                        <line x1="1" y1="6" x2="11" y2="6" />
+                                    </svg>
+                                    Subscribe
+                                </button>
+                            </div>
+                        </div>
+                        <div class="subscriptions-list-header">
+                            <h3 class="section-title">Active Subscriptions</h3>
+                            <span class="subscription-count" id="subscription-count">0</span>
+                        </div>
+                        <div class="subscriptions-list" id="subscriptions-list">
+                            <!-- Subscriptions will be injected here -->
+                        </div>
+                    </div>
+                    <div class="subscription-messages" id="subscription-messages">
+                        <div class="messages-header">
+                            <h3>Messages</h3>
+                            <div class="messages-actions">
+                                <button class="btn-icon-sm" id="refresh-messages-btn" title="Refresh">
+                                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 2v4h-4M2 12v-4h4M12 6A6 6 0 104 2M2 8a6 6 0 108-4"/>
+                                    </svg>
+                                </button>
+                                <button class="btn-icon-sm" id="clear-messages-btn" title="Clear">
+                                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M2 4h10M5 4V2h4v2M4 4v8h6V4"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="messages-list" id="messages-list">
+                            <p class="empty-state">Select a subscription to view messages</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="close-subscriptions-btn">Close</button>
             </div>
         </div>
     </div>

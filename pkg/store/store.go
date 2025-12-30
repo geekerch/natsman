@@ -10,6 +10,7 @@ import (
 )
 
 type Template struct {
+	Mode    string `json:"mode"` // "request" or "pubsub"
 	Subject string `json:"subject"`
 	Payload string `json:"payload"`
 }
@@ -460,16 +461,19 @@ func (s *Store) GetNatsConfig() (string, string) {
 func parseTemplate(content string) *Template {
 	parts := strings.SplitN(content, "---", 2)
 
-	template := &Template{}
+	template := &Template{
+		Mode: "request", // Default mode
+	}
 
 	if len(parts) > 0 {
-		// Parse subject from first part
+		// Parse headers from first part
 		lines := strings.Split(parts[0], "\n")
 		for _, line := range lines {
 			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "Subject:") {
+			if strings.HasPrefix(line, "Mode:") {
+				template.Mode = strings.ToLower(strings.TrimSpace(strings.TrimPrefix(line, "Mode:")))
+			} else if strings.HasPrefix(line, "Subject:") {
 				template.Subject = strings.TrimSpace(strings.TrimPrefix(line, "Subject:"))
-				break
 			}
 		}
 	}
@@ -482,5 +486,9 @@ func parseTemplate(content string) *Template {
 }
 
 func formatTemplate(template *Template) string {
-	return fmt.Sprintf("Subject: %s\n---\n%s", template.Subject, template.Payload)
+	mode := template.Mode
+	if mode == "" {
+		mode = "request"
+	}
+	return fmt.Sprintf("Mode: %s\nSubject: %s\n---\n%s", mode, template.Subject, template.Payload)
 }

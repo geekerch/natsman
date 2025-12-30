@@ -26,6 +26,7 @@ func NewRequestService(store *store.Store, executor *executor.Executor) *Request
 
 // RequestPayload defines the structure for sending a NATS request
 type RequestPayload struct {
+	Mode      string                    `json:"mode"` // "request" or "pubsub"
 	Subject   string                    `json:"subject"`
 	Body      string                    `json:"body"`
 	Variables map[string]store.Variable `json:"variables"`
@@ -39,7 +40,7 @@ type SendReqResult struct {
 	Elapsed string `json:"elapsed"`
 }
 
-// SendRequest handles the logic of processing templates and sending the NATS request
+// SendRequest handles the logic of processing templates and sending the NATS request or publish
 func (s *RequestService) SendRequest(req RequestPayload) (*SendReqResult, error) {
 	// Get global variables
 	globalVars := s.store.GetGlobalVars()
@@ -83,11 +84,6 @@ func (s *RequestService) SendRequest(req RequestPayload) (*SendReqResult, error)
 
 	// Connect and Send
 	cfg := req.Config
-	// Note: URL and CredsPath default handling should be done by caller or here if we pass defaults?
-	// The store has access to active profile, but the request might carry specific config.
-	// We will assume the caller has already populated the Config with defaults if they were empty,
-	// OR we can fetch them from store if empty.
-	// Let's check store for defaults if empty!
 	if cfg.URL == "" {
 		cfg.URL, _ = s.store.GetNatsConfig()
 		if cfg.URL == "" {
@@ -104,18 +100,40 @@ func (s *RequestService) SendRequest(req RequestPayload) (*SendReqResult, error)
 	}
 	defer client.Close()
 
-	start := time.Now()
-	resp, err := client.Request(subject, []byte(body), 5*time.Second) // 5s timeout
-	if err != nil {
-		return nil, err
+	mode := req.Mode
+	if mode == "" {
+		mode = "request" // Default mode
 	}
-	elapsed := time.Since(start)
 
-	return &SendReqResult{
-		Reply:   string(resp),
-		Status:  "OK",
-		Elapsed: elapsed.String(),
-	}, nil
+	start := time.Now()
+	
+	if mode == "pubsub" {
+		// Publish mode
+		err = client.Publish(subject, []byte(body))
+		if err != nil {
+			return nil, err
+		}
+		elapsed := time.Since(start)
+		
+		return &SendReqResult{
+			Reply:   "Message published successfully",
+			Status:  "OK",
+			Elapsed: elapsed.String(),
+		}, nil
+	} else {
+		// Request/Reply mode
+		resp, err := client.Request(subject, []byte(body), 5*time.Second) // 5s timeout
+		if err != nil {
+			return nil, err
+		}
+		elapsed := time.Since(start)
+
+		return &SendReqResult{
+			Reply:   string(resp),
+			Status:  "OK",
+			Elapsed: elapsed.String(),
+		}, nil
+	}
 }
 
 // ExtractVariables parses the content and returns list of {{.Var}} names

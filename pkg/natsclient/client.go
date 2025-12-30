@@ -54,3 +54,42 @@ func (c *Client) Request(subject string, data []byte, timeout time.Duration) ([]
 
 	return msg.Data, nil
 }
+
+func (c *Client) Publish(subject string, data []byte) error {
+	if c.nc == nil {
+		return fmt.Errorf("not connected")
+	}
+
+	return c.nc.Publish(subject, data)
+}
+
+type Subscription struct {
+	sub *nats.Subscription
+}
+
+func (c *Client) Subscribe(subject string, handler func(msg *nats.Msg)) (*Subscription, error) {
+	if c.nc == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+
+	sub, err := c.nc.Subscribe(subject, handler)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Subscription{sub: sub}, nil
+}
+
+func (s *Subscription) Unsubscribe() error {
+	if s.sub != nil {
+		return s.sub.Unsubscribe()
+	}
+	return nil
+}
+
+func (c *Client) Drain() error {
+	if c.nc != nil {
+		return c.nc.Drain()
+	}
+	return nil
+}
