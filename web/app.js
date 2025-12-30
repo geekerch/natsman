@@ -2308,18 +2308,21 @@ const app = {
     },
 
     saveSettings: async () => {
+        console.log('[saveSettings] Function called');
         const profileName = app.state.activeNatsProfile;
         const profile = {
             name: profileName,
             url: document.getElementById('config-url').value,
             creds_path: document.getElementById('config-creds').value
         };
+        console.log('[saveSettings] Profile:', profile);
 
         try {
             await Backend.saveNatsProfile(profile);
 
             await app.loadNatsProfiles();
             app.closeSettings();
+            console.log('[saveSettings] Save completed');
         } catch (e) {
             console.error('Failed to save NATS profile:', e);
             app.showToast('Failed to save profile');
@@ -2365,6 +2368,7 @@ const app = {
     },
 
     saveGlobals: async () => {
+        console.log('[saveGlobals] Function called');
         const container = document.getElementById('globals-list');
         const vars = {};
 
@@ -2388,6 +2392,7 @@ const app = {
             name: profileName,
             variables: vars
         };
+        console.log('[saveGlobals] Profile:', profile);
 
         try {
             await Backend.saveGlobalsProfile(profile);
@@ -2396,6 +2401,7 @@ const app = {
             await app.loadGlobalsProfiles();
             app.closeGlobals();
             app.parseVariables(); // Re-render local vars to update placeholders
+            console.log('[saveGlobals] Save completed');
         } catch (e) {
             console.error('Failed to save globals profile:', e);
             app.showToast('Failed to save profile');
@@ -2454,16 +2460,19 @@ const app = {
     },
 
     saveExtensions: async () => {
+        console.log('[saveExtensions] Function called');
         const checkboxes = document.querySelectorAll('#extensions-list input[type="checkbox"]');
         const activeExtensions = Array.from(checkboxes)
             .filter(cb => cb.checked)
             .map(cb => cb.dataset.filename);
+        console.log('[saveExtensions] Active extensions:', activeExtensions);
 
         try {
             await Backend.setActiveJSExtensions(activeExtensions);
             app.state.activeExtensions = activeExtensions;
             app.closeExtensions();
             app.showToast('Extensions saved');
+            console.log('[saveExtensions] Save completed');
         } catch (e) {
             console.error('Failed to save extensions:', e);
             app.showToast('Failed to save extensions');
