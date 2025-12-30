@@ -380,6 +380,10 @@ func SetupRouter(exeDir string, appCfg *config.AppConfig, configPath string, tmp
 		})
 
 		// Subscribe endpoints
+		api.GET("/subscribe", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{"subjects": subService.GetActiveSubscriptions()})
+		})
+
 		api.POST("/subscribe", func(c *gin.Context) {
 			var req application.SubscribePayload
 			if err := c.BindJSON(&req); err != nil {
@@ -393,6 +397,37 @@ func SetupRouter(exeDir string, appCfg *config.AppConfig, configPath string, tmp
 			}
 
 			c.JSON(http.StatusOK, gin.H{"status": "subscribed", "subject": req.Subject})
+		})
+
+		api.GET("/subscribe/messages", func(c *gin.Context) {
+			subject := c.Query("subject")
+			if subject == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "subject parameter is required"})
+				return
+			}
+
+			messages, err := subService.GetMessages(subject)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{"messages": messages})
+		})
+
+		api.DELETE("/subscribe/messages", func(c *gin.Context) {
+			subject := c.Query("subject")
+			if subject == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "subject parameter is required"})
+				return
+			}
+
+			if err := subService.ClearMessages(subject); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{"status": "cleared"})
 		})
 
 		api.POST("/unsubscribe", func(c *gin.Context) {

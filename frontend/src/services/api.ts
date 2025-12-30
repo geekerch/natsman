@@ -134,7 +134,12 @@ export const ApiService = {
         if (wails) {
             return wails.Subscribe({ subject, config: { url: '', creds_path: '' } });
         }
-        throw new Error('Pub/Sub only supported in Desktop mode');
+        const res = await fetch(`${API_BASE}/subscribe`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subject, config: { url: '', creds_path: '' } }),
+        });
+        if (!res.ok) throw new Error('Failed to subscribe');
     },
 
     async unsubscribe(subject: string): Promise<void> {
@@ -142,7 +147,12 @@ export const ApiService = {
         if (wails) {
             return wails.Unsubscribe(subject);
         }
-        throw new Error('Pub/Sub only supported in Desktop mode');
+        const res = await fetch(`${API_BASE}/unsubscribe`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subject }),
+        });
+        if (!res.ok) throw new Error('Failed to unsubscribe');
     },
 
     async getSubscriptionMessages(subject: string): Promise<SubscriptionMessage[]> {
@@ -150,7 +160,10 @@ export const ApiService = {
         if (wails) {
             return wails.GetSubscriptionMessages(subject);
         }
-        throw new Error('Pub/Sub only supported in Desktop mode');
+        const res = await fetch(`${API_BASE}/subscribe/messages?subject=${encodeURIComponent(subject)}`);
+        if (!res.ok) throw new Error('Failed to get messages');
+        const data = await res.json();
+        return data.messages || [];
     },
 
     async getActiveSubscriptions(): Promise<string[]> {
@@ -158,7 +171,10 @@ export const ApiService = {
         if (wails) {
             return wails.GetActiveSubscriptions();
         }
-        return [];
+        const res = await fetch(`${API_BASE}/subscribe`);
+        if (!res.ok) throw new Error('Failed to get subscriptions');
+        const data = await res.json();
+        return data.subjects || [];
     },
 
     async clearSubscriptionMessages(subject: string): Promise<void> {
@@ -166,6 +182,10 @@ export const ApiService = {
         if (wails) {
             return wails.ClearSubscriptionMessages(subject);
         }
+        const res = await fetch(`${API_BASE}/subscribe/messages?subject=${encodeURIComponent(subject)}`, {
+            method: 'DELETE',
+        });
+        if (!res.ok) throw new Error('Failed to clear messages');
     },
 
     // --- KV Store ---
