@@ -40,7 +40,7 @@ const loadMessages = async () => {
   if (!selectedStream.value) return
   loadingMessages.value = true
   try {
-    const res = await ApiService.getStreamMessages(selectedStream.value, 20)
+    const res = await ApiService.getStreamMessages(selectedStream.value, true)
     messages.value = res.messages || []
   } catch (e: any) {
     message.error('Failed to load messages: ' + e.message)

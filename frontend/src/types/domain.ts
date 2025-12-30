@@ -63,3 +63,17 @@ export interface StreamInfo {
     created: string;
     state: StreamState;
 }
+
+export interface SubscriptionMessage {
+    subject: string;
+    data: string;
+    timestamp: string;
+}
+
+export interface KVEntry {
+    key: string;
+    value: string;
+    revision: number;
+    created: string;
+    operation: string;
+}
