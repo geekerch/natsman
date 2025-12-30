@@ -323,6 +323,73 @@ const Backend = {
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         return data;
+    },
+
+    // KV
+    async listKVBuckets() {
+        if (this.isDesktop()) return await window.go.main.App.ListKVBuckets();
+        const res = await fetch(API_BASE + '/api/kv/buckets');
+        const data = await res.json();
+        return data.buckets || [];
+    },
+
+    async createKVBucket(name, config = {}) {
+        if (this.isDesktop()) return await window.go.main.App.CreateKVBucket(name, config);
+        const res = await fetch(API_BASE + '/api/kv/buckets', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, config })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        return data;
+    },
+
+    async deleteKVBucket(name) {
+        if (this.isDesktop()) return await window.go.main.App.DeleteKVBucket(name);
+        const res = await fetch(API_BASE + `/api/kv/buckets/${encodeURIComponent(name)}`, {
+            method: 'DELETE'
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        return data;
+    },
+
+    async listKVKeys(bucket) {
+        if (this.isDesktop()) return await window.go.main.App.ListKVKeys(bucket);
+        const res = await fetch(API_BASE + `/api/kv/buckets/${encodeURIComponent(bucket)}/keys`);
+        const data = await res.json();
+        return data.keys || [];
+    },
+
+    async getKV(bucket, key) {
+        if (this.isDesktop()) return await window.go.main.App.GetKV(bucket, key);
+        const res = await fetch(API_BASE + `/api/kv/buckets/${encodeURIComponent(bucket)}/keys/${encodeURIComponent(key)}`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        return data;
+    },
+
+    async putKV(bucket, key, value) {
+        if (this.isDesktop()) return await window.go.main.App.PutKV(bucket, key, value);
+        const res = await fetch(API_BASE + `/api/kv/buckets/${encodeURIComponent(bucket)}/keys/${encodeURIComponent(key)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ value })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        return data;
+    },
+
+    async deleteKV(bucket, key) {
+        if (this.isDesktop()) return await window.go.main.App.DeleteKV(bucket, key);
+        const res = await fetch(API_BASE + `/api/kv/buckets/${encodeURIComponent(bucket)}/keys/${encodeURIComponent(key)}`, {
+            method: 'DELETE'
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        return data;
     }
 };
 
@@ -361,7 +428,11 @@ const app = {
         currentStartSeq: 1,
         currentMessagesResult: null,
         loadingMessages: false,
-        allMessages: []
+        allMessages: [],
+        // KV
+        kvBuckets: [],
+        currentKVBucket: null,
+        selectedProfile: null
     },
 
     showToast: (message, type = 'info') => {
@@ -507,6 +578,7 @@ const app = {
             const data = await Backend.getNatsProfiles();
             app.state.natsProfiles = data.profiles || [];
             app.state.activeNatsProfile = data.active || '';
+            app.state.selectedProfile = data.active || '';
         } catch (e) {
             console.error('Failed to load NATS profiles:', e);
         }
@@ -526,6 +598,7 @@ const app = {
         try {
             await Backend.switchNatsProfile(profileName);
             app.state.activeNatsProfile = profileName;
+            app.state.selectedProfile = profileName;
             await app.loadConfig();
         } catch (e) {
             console.error('Failed to switch NATS profile:', e);
@@ -1867,7 +1940,183 @@ const app = {
         
         if (tabName === 'consumers') {
             app.updateConsumerStreamSelect();
+        } else if (tabName === 'kv') {
+            app.loadKVBuckets();
         }
+    },
+
+    // KV Functions
+    loadKVBuckets: async () => {
+        const profile = app.state.currentProfile;
+        if (!profile) {
+            console.log('No profile selected, skipping bucket load');
+            return;
+        }
+        
+        try {
+            app.state.kvBuckets = await Backend.listKVBuckets();
+            app.renderKVBuckets();
+        } catch (e) {
+            console.error('Failed to load buckets:', e);
+            app.showToast(`Failed to load buckets: ${e.message}`, 'error');
+        }
+    },
+
+    renderKVBuckets: () => {
+        const listEl = document.getElementById('kv-buckets-list');
+        if (!listEl) return;
+
+        if (app.state.kvBuckets.length === 0) {
+            listEl.innerHTML = '<p class="empty-state">No KV buckets created yet</p>';
+            return;
+        }
+
+        listEl.innerHTML = app.state.kvBuckets.map(bucket => `
+            <div class="stream-item">
+                <div class="stream-name">${bucket}</div>
+                <button class="btn-icon-sm view-kv-btn" data-bucket="${bucket}" title="View Keys">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M1 6c1.5-3 4.5-3 5-3s3.5 0 5 3c-1.5 3-4.5 3-5 3s-3.5 0-5-3z"/>
+                        <circle cx="6" cy="6" r="2"/>
+                    </svg>
+                </button>
+            </div>
+        `).join('');
+
+        // Bind view buttons
+        document.querySelectorAll('.view-kv-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const bucket = e.currentTarget.getAttribute('data-bucket');
+                await app.viewKVKeys(bucket);
+            });
+        });
+    },
+
+    viewKVKeys: async (bucket) => {
+        try {
+            app.state.currentKVBucket = bucket;
+            const keys = await Backend.listKVKeys(bucket);
+            app.renderKVKeys(keys);
+            document.getElementById('kv-viewer-modal').classList.add('active');
+        } catch (e) {
+            console.error('Failed to load keys:', e);
+            app.showToast(`Failed to load keys: ${e.message}`, 'error');
+        }
+    },
+
+    renderKVKeys: (keys) => {
+        const listEl = document.getElementById('kv-keys-list');
+        if (!listEl) return;
+
+        document.getElementById('kv-bucket-name').textContent = app.state.currentKVBucket;
+
+        if (keys.length === 0) {
+            listEl.innerHTML = '<p class="empty-state">No keys in this bucket</p>';
+            return;
+        }
+
+        listEl.innerHTML = keys.map(key => `
+            <div class="kv-key-item">
+                <div class="kv-key-name">${key}</div>
+                <div style="display: flex; gap: 4px;">
+                    <button class="btn-icon-sm get-kv-btn" data-key="${key}" title="Get Value">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M6 2v8M2 6h8"/>
+                        </svg>
+                    </button>
+                    <button class="btn-icon-sm delete-kv-btn" data-key="${key}" title="Delete">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M2 3h8M4 3V2h4v1M5 5v4M7 5v4"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        `).join('');
+
+        // Bind buttons
+        document.querySelectorAll('.get-kv-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const key = e.currentTarget.getAttribute('data-key');
+                await app.getKVValue(key);
+            });
+        });
+
+        document.querySelectorAll('.delete-kv-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const key = e.currentTarget.getAttribute('data-key');
+                if (confirm(`Delete key "${key}"?`)) {
+                    await app.deleteKVKey(key);
+                }
+            });
+        });
+    },
+
+    getKVValue: async (key) => {
+        try {
+            const entry = await Backend.getKV(app.state.currentKVBucket, key);
+            document.getElementById('kv-key-input').value = key;
+            document.getElementById('kv-value-input').value = entry.value;
+            document.getElementById('kv-revision').textContent = `Revision: ${entry.revision}`;
+        } catch (e) {
+            console.error('Failed to get value:', e);
+            app.showToast(`Failed to get value: ${e.message}`, 'error');
+        }
+    },
+
+    putKVValue: async () => {
+        try {
+            const key = document.getElementById('kv-key-input').value.trim();
+            const value = document.getElementById('kv-value-input').value;
+            
+            if (!key) {
+                app.showToast('Key is required', 'warning');
+                return;
+            }
+
+            await Backend.putKV(app.state.currentKVBucket, key, value);
+            app.showToast('Value saved successfully', 'success');
+            
+            // Reload keys
+            const keys = await Backend.listKVKeys(app.state.currentKVBucket);
+            app.renderKVKeys(keys);
+            
+            // Clear inputs
+            document.getElementById('kv-key-input').value = '';
+            document.getElementById('kv-value-input').value = '';
+            document.getElementById('kv-revision').textContent = '';
+        } catch (e) {
+            console.error('Failed to put value:', e);
+            app.showToast(`Failed to put value: ${e.message}`, 'error');
+        }
+    },
+
+    deleteKVKey: async (key) => {
+        try {
+            await Backend.deleteKV(app.state.currentKVBucket, key);
+            app.showToast('Key deleted successfully', 'success');
+            
+            // Reload keys
+            const keys = await Backend.listKVKeys(app.state.currentKVBucket);
+            app.renderKVKeys(keys);
+            
+            // Clear inputs if this key was being viewed
+            if (document.getElementById('kv-key-input').value === key) {
+                document.getElementById('kv-key-input').value = '';
+                document.getElementById('kv-value-input').value = '';
+                document.getElementById('kv-revision').textContent = '';
+            }
+        } catch (e) {
+            console.error('Failed to delete key:', e);
+            app.showToast(`Failed to delete key: ${e.message}`, 'error');
+        }
+    },
+
+    closeKVViewer: () => {
+        document.getElementById('kv-viewer-modal').classList.remove('active');
+        app.state.currentKVBucket = null;
+        document.getElementById('kv-key-input').value = '';
+        document.getElementById('kv-value-input').value = '';
+        document.getElementById('kv-revision').textContent = '';
     },
 
     loadJSStreams: async () => {
@@ -2423,6 +2672,16 @@ const app = {
                 };
             }
 
+            // KV Viewer Modal
+            const closeKVBtn = document.getElementById('close-kv-viewer-btn');
+            if (closeKVBtn) closeKVBtn.onclick = app.closeKVViewer;
+            
+            const kvBackdrop = document.querySelector('#kv-viewer-modal .modal-backdrop');
+            if (kvBackdrop) kvBackdrop.onclick = app.closeKVViewer;
+            
+            const putKVBtn = document.getElementById('put-kv-btn');
+            if (putKVBtn) putKVBtn.onclick = app.putKVValue;
+
             console.log('[SetupEvents] Finished setupEventListeners');
         } catch (e) {
             console.error('[SetupEvents] Error:', e);
@@ -2597,11 +2856,15 @@ const kvManager = {
 
     async loadBuckets() {
         try {
-            const profile = app.state.currentProfile;
+            const profile = app.state.activeNatsProfile;
             if (!profile) {
                 throw new Error('No profile selected');
             }
             const response = await fetch(`/api/kv/buckets?profile=${encodeURIComponent(profile)}`);
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(`Server error: ${response.status} - ${text}`);
+            }
             const data = await response.json();
             this.buckets = data.buckets || [];
             this.renderBuckets();
@@ -2651,7 +2914,7 @@ const kvManager = {
 
     async loadKeys(bucket) {
         try {
-            const profile = app.state.currentProfile;
+            const profile = app.state.activeNatsProfile;
             if (!profile) {
                 throw new Error('No profile selected');
             }
@@ -2704,7 +2967,7 @@ const kvManager = {
 
     async viewKey(key) {
         try {
-            const profile = app.state.currentProfile;
+            const profile = app.state.activeNatsProfile;
             const response = await fetch(`/api/kv/buckets/${this.currentBucket}/keys/${key}?profile=${encodeURIComponent(profile)}`);
             const data = await response.json();
             
@@ -2729,7 +2992,7 @@ const kvManager = {
 
     async editKey(key) {
         try {
-            const profile = app.state.currentProfile;
+            const profile = app.state.activeNatsProfile;
             const response = await fetch(`/api/kv/buckets/${this.currentBucket}/keys/${key}?profile=${encodeURIComponent(profile)}`);
             const data = await response.json();
             
@@ -2747,7 +3010,7 @@ const kvManager = {
         if (!confirm(`Delete key "${key}"?`)) return;
 
         try {
-            const profile = app.state.currentProfile;
+            const profile = app.state.activeNatsProfile;
             const response = await fetch(`/api/kv/buckets/${this.currentBucket}/keys/${key}?profile=${encodeURIComponent(profile)}`, {
                 method: 'DELETE'
             });
@@ -2763,7 +3026,7 @@ const kvManager = {
 
     async putKey(key, value) {
         try {
-            const profile = app.state.currentProfile;
+            const profile = app.state.activeNatsProfile;
             const response = await fetch(`/api/kv/buckets/${this.currentBucket}/keys/${key}?profile=${encodeURIComponent(profile)}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -2791,7 +3054,7 @@ const kvManager = {
 
     async createBucket(bucketName, maxHistoryPerKey) {
         try {
-            const profile = app.state.currentProfile;
+            const profile = app.state.activeNatsProfile;
             const response = await fetch('/api/kv/buckets', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -2816,7 +3079,7 @@ const kvManager = {
         if (!confirm(`Delete bucket "${this.currentBucket}"?`)) return;
 
         try {
-            const profile = app.state.currentProfile;
+            const profile = app.state.activeNatsProfile;
             const response = await fetch(`/api/kv/buckets/${this.currentBucket}?profile=${encodeURIComponent(profile)}`, {
                 method: 'DELETE'
             });
@@ -2852,13 +3115,15 @@ const kvManager = {
 // Initialize on load
 // Initialize on load
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
         console.log("DOM Ready");
-        app.init();
+        await app.init();
         kvManager.init();
     });
 } else {
     console.log('[Init] DOM already ready, forcing init...');
-    app.init();
-    kvManager.init();
+    (async () => {
+        await app.init();
+        kvManager.init();
+    })();
 }
