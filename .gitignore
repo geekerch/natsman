@@ -1,13 +1,16 @@
 # Binaries
 main
+natsman
 natsman-server
+natsman-server-dev
+__debug_bin*
 *.exe
 *.dll
 *.so
 *.dylib
 
 # Wails
-build/bin/
+build/
 frontend/dist/
 frontend/node_modules/
 wailsjs/
