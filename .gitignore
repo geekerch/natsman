@@ -1,0 +1,26 @@
+# Binaries
+main
+natsman-server
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Wails
+build/bin/
+frontend/dist/
+frontend/node_modules/
+wailsjs/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# App Data
+data.json
+*.log

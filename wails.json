@@ -1,0 +1,16 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "natsman",
+  "outputfilename": "natsman",
+  "frontend:dir": "web",
+  "frontend:install": "",
+  "frontend:build": "",
+  "frontend:dev:watcher": "",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "cch",
+    "email": "user@example.com"
+  },
+  "wailsjsdir": "./frontend",
+  "tags": "desktop"
+}

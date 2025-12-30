@@ -1,0 +1,6 @@
+{
+  "port": 8080,
+  "store_file": "data.json",
+  "nats_url": "nats://localhost:4222",
+  "nats_creds": ""
+}

@@ -1,0 +1,17 @@
+{
+  "globals_profiles": [
+    {
+      "name": "Default",
+      "variables": {}
+    }
+  ],
+  "active_globals_profile": "Default",
+  "nats_profiles": [
+    {
+      "name": "Default",
+      "url": "nats://localhost:4222",
+      "creds_path": ""
+    }
+  ],
+  "active_nats_profile": "Default"
+}
