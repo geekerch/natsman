@@ -1,0 +1,7 @@
+Mode: pubsub
+Subject: test.request
+---
+{
+  "message": "Hello from request",
+  "timestamp": "{{.timestamp}}"
+}

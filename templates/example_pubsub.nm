@@ -1,0 +1,11 @@
+Mode: pubsub
+Subject: test.events
+---
+{
+  "event": "user.created",
+  "data": {
+    "userId": "{{.userId}}",
+    "username": "{{.username}}",
+    "timestamp": "{{.timestamp}}"
+  }
+}

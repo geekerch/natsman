@@ -8,17 +8,19 @@ import (
 	"os"
 	"path/filepath"
 
-	"natsman/pkg/executor"
-	"natsman/pkg/service"
-	"natsman/pkg/store"
+	"natsman/internal/application"
+	"natsman/internal/config"
+	"natsman/internal/infrastructure/persistence"
+	"natsman/internal/infrastructure/scripting"
+	"natsman/internal/interfaces/http"
+	"natsman/internal/interfaces/wails"
 )
 
 //go:embed web/*
 var embeddedFS embed.FS
 
 var (
-	dataStore *store.Store
-	exec      *executor.Executor // JavaScript executor for dynamic variables
+	// Global variables for services if needed elsewhere
 )
 
 func main() {
@@ -39,7 +41,7 @@ func main() {
 	}
 
 	// Load or create default config
-	appCfg := loadConfig(configPath)
+	appCfg := config.LoadConfig(configPath)
 
 	// Initialize Store with absolute paths
 	templatesDir := appCfg.TemplatesDir
@@ -51,32 +53,27 @@ func main() {
 		profilesFile = filepath.Join(exeDir, profilesFile)
 	}
 
-	dataStore, err = store.NewStore(templatesDir, profilesFile)
+	// Initialize Persistence (FileStore implements both repositories)
+	fileStore, err := persistence.NewFileStore(templatesDir, profilesFile)
 	if err != nil {
 		log.Fatalf("Failed to initialize store: %v", err)
 	}
 
 	// Initialize executor with extensions directory
-	exec = executor.New()
-	exec.SetExtensionsDir(dataStore.GetExtensionsDir())
+	exec := scripting.New()
+	exec.SetExtensionsDir(fileStore.GetExtensionsDir())
 
-	// Initialize Request Service
-	reqService := service.NewRequestService(dataStore, exec)
-
-	// Initialize Subscribe Service
-	subService := service.NewSubscribeService(dataStore)
-
-	// Initialize JetStream Service
-	jsService := service.NewJetStreamService(dataStore, exec)
-
-	// Initialize KV Service
-	kvService := service.NewKVService(dataStore)
+	// Initialize Application Services
+	reqService := application.NewRequestService(fileStore, exec)
+	subService := application.NewSubscribeService(fileStore)
+	jsService := application.NewJetStreamService(fileStore, exec)
+	kvService := application.NewKVService(fileStore)
 
 	// Initialize Wails App Adapter (RPC Layer)
-	app := NewApp(dataStore, reqService, subService, jsService, kvService)
+	app := wails.NewApp(fileStore, fileStore, reqService, subService, jsService, kvService)
 
 	// Setup Router
-	r := SetupRouter(exeDir, appCfg, configPath, dataStore, reqService, subService, jsService, kvService, embeddedFS)
+	r := http.SetupRouter(exeDir, appCfg, configPath, fileStore, fileStore, reqService, subService, jsService, kvService, embeddedFS)
 
 	// Mode Handling via StartApp (implementation depends on build tags)
 	webFS, err := fs.Sub(embeddedFS, "web")

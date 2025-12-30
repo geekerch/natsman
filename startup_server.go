@@ -7,10 +7,13 @@ import (
 	"io/fs"
 	"log"
 
+	"natsman/internal/config"
+	"natsman/internal/interfaces/wails"
+
 	"github.com/gin-gonic/gin"
 )
 
-func StartApp(cfg *AppConfig, r *gin.Engine, assets fs.FS, app *App) {
+func StartApp(cfg *config.AppConfig, r *gin.Engine, assets fs.FS, app *wails.App) {
 	// In pure server mode, we just run Gin.
 	// The assets logic was already handled by specific Gin handlers in SetupRouter,
 	// or we ignore the passed assets here because SetupRouter used the 'web' directory logic.

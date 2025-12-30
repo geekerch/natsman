@@ -6,19 +6,22 @@ import (
 	"io/fs"
 	"log"
 
+	"natsman/internal/config"
+	"natsman/internal/interfaces/wails"
+
 	"github.com/gin-gonic/gin"
-	"github.com/wailsapp/wails/v2"
+	wailsapp "github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 )
 
-func StartApp(cfg *AppConfig, r *gin.Engine, assets fs.FS, app *App) {
+func StartApp(cfg *config.AppConfig, r *gin.Engine, assets fs.FS, app *wails.App) {
 	// Desktop Mode
 	log.Println("Starting Desktop Mode...")
 
 	// Remove background server for pure RPC desktop app
 
-	err := wails.Run(&options.App{
+	err := wailsapp.Run(&options.App{
 		Title:  "NATS Manager",
 		Width:  1024,
 		Height: 768,
@@ -26,7 +29,7 @@ func StartApp(cfg *AppConfig, r *gin.Engine, assets fs.FS, app *App) {
 			Assets: assets,
 		},
 		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 1},
-		OnStartup:        app.startup,
+		OnStartup:        app.Startup,
 		Bind: []interface{}{
 			app,
 		},
