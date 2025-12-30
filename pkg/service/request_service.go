@@ -42,6 +42,15 @@ type SendReqResult struct {
 
 // SendRequest handles the logic of processing templates and sending the NATS request or publish
 func (s *RequestService) SendRequest(req RequestPayload) (*SendReqResult, error) {
+	// Load active JS extensions
+	activeExtensions := s.store.GetActiveJSExtensions()
+	
+	for _, extFile := range activeExtensions {
+		if err := s.executor.LoadExtension(extFile); err != nil {
+			return nil, fmt.Errorf("failed to load extension '%s': %v", extFile, err)
+		}
+	}
+	
 	// Get global variables
 	globalVars := s.store.GetGlobalVars()
 	finalVars := make(map[string]string)

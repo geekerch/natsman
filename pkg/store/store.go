@@ -43,27 +43,38 @@ type ProfileData struct {
 	ActiveGlobalsProfile string           `json:"active_globals_profile"`
 	NatsProfiles         []NatsProfile    `json:"nats_profiles"`
 	ActiveNatsProfile    string           `json:"active_nats_profile"`
+	JSExtensions         []string         `json:"js_extensions,omitempty"`
 }
 
 type Store struct {
-	mu           sync.RWMutex
-	templatesDir string
-	profilesFile string
-	profiles     ProfileData
+	mu            sync.RWMutex
+	templatesDir  string
+	profilesFile  string
+	extensionsDir string
+	profiles      ProfileData
 }
 
 func NewStore(templatesDir string, profilesFile string) (*Store, error) {
+	extensionsDir := filepath.Join(filepath.Dir(templatesDir), "extensions")
+	
 	s := &Store{
-		templatesDir: templatesDir,
-		profilesFile: profilesFile,
+		templatesDir:  templatesDir,
+		profilesFile:  profilesFile,
+		extensionsDir: extensionsDir,
 		profiles: ProfileData{
 			GlobalsProfiles: []GlobalsProfile{},
 			NatsProfiles:    []NatsProfile{},
+			JSExtensions:    []string{},
 		},
 	}
 
 	// Create templates directory if not exists
 	if err := os.MkdirAll(templatesDir, 0755); err != nil {
+		return nil, err
+	}
+	
+	// Create extensions directory if not exists
+	if err := os.MkdirAll(extensionsDir, 0755); err != nil {
 		return nil, err
 	}
 
@@ -288,7 +299,10 @@ func (s *Store) LoadProfiles() error {
 func (s *Store) SaveProfiles() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.saveProfilesLocked()
+}
 
+func (s *Store) saveProfilesLocked() error {
 	bytes, err := json.MarshalIndent(s.profiles, "", "  ")
 	if err != nil {
 		return err
@@ -491,4 +505,87 @@ func formatTemplate(template *Template) string {
 		mode = "request"
 	}
 	return fmt.Sprintf("Mode: %s\nSubject: %s\n---\n%s", mode, template.Subject, template.Payload)
+}
+
+// JS Extensions Management
+
+func (s *Store) GetExtensionsDir() string {
+	return s.extensionsDir
+}
+
+func (s *Store) ListJSExtensions() ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	entries, err := os.ReadDir(s.extensionsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []string{}, nil
+		}
+		return nil, err
+	}
+	
+	var extensions []string
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".js") {
+			extensions = append(extensions, entry.Name())
+		}
+	}
+	
+	return extensions, nil
+}
+
+func (s *Store) GetActiveJSExtensions() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	if s.profiles.JSExtensions == nil {
+		return []string{}
+	}
+	return s.profiles.JSExtensions
+}
+
+func (s *Store) SetActiveJSExtensions(extensions []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	s.profiles.JSExtensions = extensions
+	return s.saveProfilesLocked()
+}
+
+func (s *Store) AddJSExtension(filename string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	if s.profiles.JSExtensions == nil {
+		s.profiles.JSExtensions = []string{}
+	}
+	
+	for _, ext := range s.profiles.JSExtensions {
+		if ext == filename {
+			return nil
+		}
+	}
+	
+	s.profiles.JSExtensions = append(s.profiles.JSExtensions, filename)
+	return s.saveProfilesLocked()
+}
+
+func (s *Store) RemoveJSExtension(filename string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	if s.profiles.JSExtensions == nil {
+		return nil
+	}
+	
+	filtered := make([]string, 0)
+	for _, ext := range s.profiles.JSExtensions {
+		if ext != filename {
+			filtered = append(filtered, ext)
+		}
+	}
+	
+	s.profiles.JSExtensions = filtered
+	return s.saveProfilesLocked()
 }

@@ -280,6 +280,53 @@ func SetupRouter(exeDir string, appCfg *AppConfig, configPath string, dataStore 
 			c.JSON(http.StatusOK, gin.H{"status": "activated"})
 		})
 
+		// JS Extensions
+		api.GET("/extensions", func(c *gin.Context) {
+			available, err := dataStore.ListJSExtensions()
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			active := dataStore.GetActiveJSExtensions()
+			c.JSON(http.StatusOK, gin.H{
+				"available": available,
+				"active":    active,
+			})
+		})
+
+		api.POST("/extensions/activate", func(c *gin.Context) {
+			var req struct {
+				Extensions []string `json:"extensions"`
+			}
+			if err := c.BindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			if err := dataStore.SetActiveJSExtensions(req.Extensions); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"status": "activated"})
+		})
+
+		api.POST("/extensions/add/:filename", func(c *gin.Context) {
+			filename := c.Param("filename")
+			if err := dataStore.AddJSExtension(filename); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"status": "added"})
+		})
+
+		api.DELETE("/extensions/:filename", func(c *gin.Context) {
+			filename := c.Param("filename")
+			if err := dataStore.RemoveJSExtension(filename); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"status": "removed"})
+		})
+
 		api.POST("/parse", func(c *gin.Context) {
 			var req struct {
 				Content string `json:"content"`

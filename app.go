@@ -278,6 +278,28 @@ func (a *App) GetKVBucketInfo(bucketName string) (map[string]interface{}, error)
 	return a.kvService.GetKVBucketInfo(service.GetKVBucketInfoRequest{Profile: "default", BucketName: bucketName})
 }
 
+// --- JS Extensions ---
+
+func (a *App) ListJSExtensions() ([]string, error) {
+	return a.store.ListJSExtensions()
+}
+
+func (a *App) GetActiveJSExtensions() []string {
+	return a.store.GetActiveJSExtensions()
+}
+
+func (a *App) SetActiveJSExtensions(extensions []string) error {
+	return a.store.SetActiveJSExtensions(extensions)
+}
+
+func (a *App) AddJSExtension(filename string) error {
+	return a.store.AddJSExtension(filename)
+}
+
+func (a *App) RemoveJSExtension(filename string) error {
+	return a.store.RemoveJSExtension(filename)
+}
+
 // Simple test method
 func (a *App) HelloRPC(name string) string {
 	return fmt.Sprintf("Hello %s from RPC!", name)

@@ -79,6 +79,31 @@ const Backend = {
         await fetch(`${API_BASE}/api/profiles/nats/${name}`, { method: 'DELETE' });
     },
 
+    // JS Extensions
+    async getJSExtensions() {
+        if (this.isDesktop()) {
+            return {
+                available: await window.go.main.App.ListJSExtensions(),
+                active: await window.go.main.App.GetActiveJSExtensions()
+            };
+        }
+        const res = await fetch(API_BASE + '/api/extensions');
+        return await res.json();
+    },
+
+    async setActiveJSExtensions(extensions) {
+        if (this.isDesktop()) return await window.go.main.App.SetActiveJSExtensions(extensions);
+        const res = await fetch(API_BASE + '/api/extensions/activate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ extensions })
+        });
+        if (!res.ok) {
+            const error = await res.text();
+            throw new Error(error || `HTTP ${res.status}`);
+        }
+    },
+
     // Tree / Templates
     async getTree() {
         if (this.isDesktop()) return await window.go.main.App.GetTree();
@@ -414,6 +439,9 @@ const app = {
         activeGlobalsProfile: '',
         natsProfiles: [],
         activeNatsProfile: '',
+        // JS Extensions
+        availableExtensions: [],
+        activeExtensions: [],
         // Pub/Sub
         mode: 'request', // 'request', 'pubsub', or 'jetstream'
         activeSubscriptions: [],
@@ -2293,7 +2321,6 @@ const app = {
 
         try {
             await Backend.saveNatsProfile(profile);
-
             await app.loadNatsProfiles();
             app.closeSettings();
         } catch (e) {
@@ -2367,14 +2394,81 @@ const app = {
 
         try {
             await Backend.saveGlobalsProfile(profile);
-
             app.state.globalVars = vars;
             await app.loadGlobalsProfiles();
             app.closeGlobals();
-            app.parseVariables(); // Re-render local vars to update placeholders
+            app.parseVariables();
         } catch (e) {
             console.error('Failed to save globals profile:', e);
             app.showToast('Failed to save profile');
+        }
+    },
+
+    // JS Extensions Management
+    openExtensions: async () => {
+        document.getElementById('extensions-modal').classList.add('active');
+        await app.loadExtensions();
+    },
+
+    closeExtensions: () => {
+        document.getElementById('extensions-modal').classList.remove('active');
+    },
+
+    loadExtensions: async () => {
+        try {
+            const data = await Backend.getJSExtensions();
+            app.state.availableExtensions = data.available || [];
+            app.state.activeExtensions = data.active || [];
+            app.renderExtensions();
+        } catch (e) {
+            console.error('Failed to load extensions:', e);
+            app.showToast('Failed to load extensions');
+        }
+    },
+
+    renderExtensions: () => {
+        const container = document.getElementById('extensions-list');
+        container.innerHTML = '';
+
+        if (app.state.availableExtensions.length === 0) {
+            container.innerHTML = `
+                <div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 12px;">
+                    No JavaScript extensions found. Place .js files in the extensions directory.
+                </div>
+            `;
+            return;
+        }
+
+        app.state.availableExtensions.forEach(filename => {
+            const isActive = app.state.activeExtensions.includes(filename);
+            const item = document.createElement('label');
+            item.className = 'extension-item';
+            item.style.cssText = 'display: flex; align-items: center; padding: 10px; background: var(--bg-secondary); border-radius: 4px; cursor: pointer;';
+            
+            item.innerHTML = `
+                <input type="checkbox" ${isActive ? 'checked' : ''} data-filename="${filename}" 
+                    style="margin-right: 10px; cursor: pointer;">
+                <span style="font-family: var(--font-mono); font-size: 12px;">${filename}</span>
+            `;
+            
+            container.appendChild(item);
+        });
+    },
+
+    saveExtensions: async () => {
+        const checkboxes = document.querySelectorAll('#extensions-list input[type="checkbox"]');
+        const activeExtensions = Array.from(checkboxes)
+            .filter(cb => cb.checked)
+            .map(cb => cb.dataset.filename);
+
+        try {
+            await Backend.setActiveJSExtensions(activeExtensions);
+            app.state.activeExtensions = activeExtensions;
+            app.closeExtensions();
+            app.showToast('Extensions saved');
+        } catch (e) {
+            console.error('Failed to save extensions:', e);
+            app.showToast('Failed to save extensions');
         }
     },
 
@@ -2578,19 +2672,45 @@ const app = {
 
             console.log('[SetupEvents] Modal listeners...');
             // Settings Modal
-            document.getElementById('settings-btn').onclick = app.openSettings;
-            document.getElementById('settings-close').onclick = app.closeSettings;
-            document.getElementById('cancel-settings-btn').onclick = app.closeSettings;
-            document.getElementById('save-settings-btn').onclick = app.saveSettings;
-            document.querySelector('#settings-modal .modal-backdrop').onclick = app.closeSettings;
+            const settingsBtn = document.getElementById('settings-btn');
+            const settingsClose = document.getElementById('settings-close');
+            const cancelSettingsBtn = document.getElementById('cancel-settings-btn');
+            const saveSettingsBtn = document.getElementById('save-settings-btn');
+            
+            if (settingsBtn) settingsBtn.onclick = app.openSettings;
+            if (settingsClose) settingsClose.onclick = app.closeSettings;
+            if (cancelSettingsBtn) cancelSettingsBtn.onclick = app.closeSettings;
+            if (saveSettingsBtn) saveSettingsBtn.onclick = app.saveSettings;
+            const settingsBackdrop = document.querySelector('#settings-modal .modal-backdrop');
+            if (settingsBackdrop) settingsBackdrop.onclick = app.closeSettings;
 
             // Globals Modal
-            document.getElementById('globals-btn').onclick = app.openGlobals;
-            document.querySelector('#globals-close').onclick = app.closeGlobals;
-            document.getElementById('cancel-globals-btn').onclick = app.closeGlobals;
-            document.getElementById('add-global-btn').onclick = app.addGlobalVar;
-            document.getElementById('save-globals-btn').onclick = app.saveGlobals;
-            document.querySelector('#globals-modal .modal-backdrop').onclick = app.closeGlobals;
+            const globalsBtn = document.getElementById('globals-btn');
+            const globalsClose = document.querySelector('#globals-close');
+            const cancelGlobalsBtn = document.getElementById('cancel-globals-btn');
+            const addGlobalBtn = document.getElementById('add-global-btn');
+            const saveGlobalsBtn = document.getElementById('save-globals-btn');
+            
+            if (globalsBtn) globalsBtn.onclick = app.openGlobals;
+            if (globalsClose) globalsClose.onclick = app.closeGlobals;
+            if (cancelGlobalsBtn) cancelGlobalsBtn.onclick = app.closeGlobals;
+            if (addGlobalBtn) addGlobalBtn.onclick = app.addGlobalVar;
+            if (saveGlobalsBtn) saveGlobalsBtn.onclick = app.saveGlobals;
+            const globalsBackdrop = document.querySelector('#globals-modal .modal-backdrop');
+            if (globalsBackdrop) globalsBackdrop.onclick = app.closeGlobals;
+
+            // Extensions Modal
+            const extensionsBtn = document.getElementById('extensions-btn');
+            const extensionsClose = document.querySelector('#extensions-close');
+            const cancelExtensionsBtn = document.getElementById('cancel-extensions-btn');
+            const saveExtensionsBtn = document.getElementById('save-extensions-btn');
+            
+            if (extensionsBtn) extensionsBtn.onclick = app.openExtensions;
+            if (extensionsClose) extensionsClose.onclick = app.closeExtensions;
+            if (cancelExtensionsBtn) cancelExtensionsBtn.onclick = app.closeExtensions;
+            if (saveExtensionsBtn) saveExtensionsBtn.onclick = app.saveExtensions;
+            const extensionsBackdrop = document.querySelector('#extensions-modal .modal-backdrop');
+            if (extensionsBackdrop) extensionsBackdrop.onclick = app.closeExtensions;
 
             // Mode Selection
             const modeSelect = document.getElementById('mode-select');
