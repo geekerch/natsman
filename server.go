@@ -17,7 +17,7 @@ import (
 )
 
 // SetupRouter initializes the Gin engine and defines all API routes
-func SetupRouter(exeDir string, appCfg *AppConfig, configPath string, dataStore *store.Store, reqService *service.RequestService, subService *service.SubscribeService, jsService *service.JetStreamService, embeddedFS embed.FS) *gin.Engine {
+func SetupRouter(exeDir string, appCfg *AppConfig, configPath string, dataStore *store.Store, reqService *service.RequestService, subService *service.SubscribeService, jsService *service.JetStreamService, kvService *service.KVService, embeddedFS embed.FS) *gin.Engine {
 	// Setup Gin
 	r := gin.New() // Use New() to avoid default Logger causing double logging potentially
 	r.Use(gin.Recovery())
@@ -506,6 +506,214 @@ func SetupRouter(exeDir string, appCfg *AppConfig, configPath string, dataStore 
 			refresh := refreshStr == "true"
 
 			result, err := jsService.FetchAllMessages(streamName, natsclient.Config{}, refresh)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, result)
+		})
+
+		// --- KV API Routes ---
+
+		// List KV buckets
+		api.GET("/kv/buckets", func(c *gin.Context) {
+			profile := c.Query("profile")
+			if profile == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "profile parameter is required"})
+				return
+			}
+			
+			result, err := kvService.ListKVBuckets(service.ListKVBucketsRequest{Profile: profile})
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, result)
+		})
+
+		// Create KV bucket
+		api.POST("/kv/buckets", func(c *gin.Context) {
+			var req service.CreateKVBucketRequest
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+
+			if err := kvService.CreateKVBucket(req); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{"status": "created"})
+		})
+
+		// Delete KV bucket
+		api.DELETE("/kv/buckets/:bucket", func(c *gin.Context) {
+			bucketName := c.Param("bucket")
+			profile := c.Query("profile")
+			if profile == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "profile parameter is required"})
+				return
+			}
+			
+			req := service.DeleteKVBucketRequest{
+				Profile:    profile,
+				BucketName: bucketName,
+			}
+			
+			if err := kvService.DeleteKVBucket(req); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{"status": "deleted"})
+		})
+
+		// Get KV bucket info
+		api.GET("/kv/buckets/:bucket/info", func(c *gin.Context) {
+			bucketName := c.Param("bucket")
+			profile := c.Query("profile")
+			if profile == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "profile parameter is required"})
+				return
+			}
+			
+			info, err := kvService.GetKVBucketInfo(service.GetKVBucketInfoRequest{
+				Profile:    profile,
+				BucketName: bucketName,
+			})
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, info)
+		})
+
+		// List keys in bucket
+		api.GET("/kv/buckets/:bucket/keys", func(c *gin.Context) {
+			bucketName := c.Param("bucket")
+			profile := c.Query("profile")
+			if profile == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "profile parameter is required"})
+				return
+			}
+			
+			req := service.KVKeysRequest{
+				Profile:    profile,
+				BucketName: bucketName,
+			}
+			
+			result, err := kvService.KVKeys(req)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, result)
+		})
+
+		// Put KV value
+		api.PUT("/kv/buckets/:bucket/keys/:key", func(c *gin.Context) {
+			bucketName := c.Param("bucket")
+			key := c.Param("key")
+			profile := c.Query("profile")
+			if profile == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "profile parameter is required"})
+				return
+			}
+			
+			var body struct {
+				Value string `json:"value"`
+			}
+			if err := c.ShouldBindJSON(&body); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+
+			req := service.KVPutRequest{
+				Profile:    profile,
+				BucketName: bucketName,
+				Key:        key,
+				Value:      body.Value,
+			}
+
+			result, err := kvService.KVPut(req)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, result)
+		})
+
+		// Get KV value
+		api.GET("/kv/buckets/:bucket/keys/:key", func(c *gin.Context) {
+			bucketName := c.Param("bucket")
+			key := c.Param("key")
+			profile := c.Query("profile")
+			if profile == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "profile parameter is required"})
+				return
+			}
+			
+			req := service.KVGetRequest{
+				Profile:    profile,
+				BucketName: bucketName,
+				Key:        key,
+			}
+
+			result, err := kvService.KVGet(req)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, result)
+		})
+
+		// Delete KV key
+		api.DELETE("/kv/buckets/:bucket/keys/:key", func(c *gin.Context) {
+			bucketName := c.Param("bucket")
+			key := c.Param("key")
+			profile := c.Query("profile")
+			if profile == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "profile parameter is required"})
+				return
+			}
+			
+			req := service.KVDeleteRequest{
+				Profile:    profile,
+				BucketName: bucketName,
+				Key:        key,
+			}
+
+			if err := kvService.KVDelete(req); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{"status": "deleted"})
+		})
+
+		// Get KV key history
+		api.GET("/kv/buckets/:bucket/keys/:key/history", func(c *gin.Context) {
+			bucketName := c.Param("bucket")
+			key := c.Param("key")
+			profile := c.Query("profile")
+			if profile == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "profile parameter is required"})
+				return
+			}
+			
+			req := service.KVHistoryRequest{
+				Profile:    profile,
+				BucketName: bucketName,
+				Key:        key,
+			}
+
+			result, err := kvService.KVHistory(req)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return

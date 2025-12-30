@@ -282,4 +282,148 @@ func (c *Client) GetStreamMessages(streamName string, limit int, startSeq uint64
 	return messages, nil
 }
 
+// KV Operations
+
+// CreateKVBucket creates a new KV bucket
+func (c *Client) CreateKVBucket(ctx context.Context, bucketName string, maxHistoryPerKey int) error {
+	if c.js == nil {
+		return fmt.Errorf("JetStream not initialized")
+	}
+	
+	config := jetstream.KeyValueConfig{
+		Bucket:  bucketName,
+		History: uint8(maxHistoryPerKey),
+	}
+	
+	_, err := c.js.CreateKeyValue(ctx, config)
+	if err != nil {
+		return fmt.Errorf("failed to create KV bucket: %w", err)
+	}
+	
+	return nil
+}
+
+// DeleteKVBucket deletes a KV bucket
+func (c *Client) DeleteKVBucket(ctx context.Context, bucketName string) error {
+	if c.js == nil {
+		return fmt.Errorf("JetStream not initialized")
+	}
+	
+	err := c.js.DeleteKeyValue(ctx, bucketName)
+	if err != nil {
+		return fmt.Errorf("failed to delete KV bucket: %w", err)
+	}
+	
+	return nil
+}
+
+// ListKVBuckets lists all KV buckets
+func (c *Client) ListKVBuckets(ctx context.Context) ([]string, error) {
+	if c.js == nil {
+		return nil, fmt.Errorf("JetStream not initialized")
+	}
+	
+	names := c.js.KeyValueStoreNames(ctx)
+	buckets := []string{}
+	
+	for name := range names.Name() {
+		buckets = append(buckets, name)
+	}
+	
+	if names.Error() != nil {
+		return buckets, fmt.Errorf("error listing KV buckets: %w", names.Error())
+	}
+	
+	return buckets, nil
+}
+
+// GetKVBucket gets a KV bucket handle
+func (c *Client) GetKVBucket(ctx context.Context, bucketName string) (jetstream.KeyValue, error) {
+	if c.js == nil {
+		return nil, fmt.Errorf("JetStream not initialized")
+	}
+	
+	kv, err := c.js.KeyValue(ctx, bucketName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get KV bucket: %w", err)
+	}
+	
+	return kv, nil
+}
+
+// KVPut puts a value into KV store
+func (c *Client) KVPut(ctx context.Context, bucketName, key string, value []byte) (uint64, error) {
+	kv, err := c.GetKVBucket(ctx, bucketName)
+	if err != nil {
+		return 0, err
+	}
+	
+	revision, err := kv.Put(ctx, key, value)
+	if err != nil {
+		return 0, fmt.Errorf("failed to put KV value: %w", err)
+	}
+	
+	return revision, nil
+}
+
+// KVGet gets a value from KV store
+func (c *Client) KVGet(ctx context.Context, bucketName, key string) (jetstream.KeyValueEntry, error) {
+	kv, err := c.GetKVBucket(ctx, bucketName)
+	if err != nil {
+		return nil, err
+	}
+	
+	entry, err := kv.Get(ctx, key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get KV value: %w", err)
+	}
+	
+	return entry, nil
+}
+
+// KVDelete deletes a key from KV store
+func (c *Client) KVDelete(ctx context.Context, bucketName, key string) error {
+	kv, err := c.GetKVBucket(ctx, bucketName)
+	if err != nil {
+		return err
+	}
+	
+	err = kv.Delete(ctx, key)
+	if err != nil {
+		return fmt.Errorf("failed to delete KV key: %w", err)
+	}
+	
+	return nil
+}
+
+// KVKeys lists all keys in a bucket
+func (c *Client) KVKeys(ctx context.Context, bucketName string) ([]string, error) {
+	kv, err := c.GetKVBucket(ctx, bucketName)
+	if err != nil {
+		return nil, err
+	}
+	
+	keys, err := kv.Keys(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list KV keys: %w", err)
+	}
+	
+	return keys, nil
+}
+
+// KVHistory gets the history of a key
+func (c *Client) KVHistory(ctx context.Context, bucketName, key string) ([]jetstream.KeyValueEntry, error) {
+	kv, err := c.GetKVBucket(ctx, bucketName)
+	if err != nil {
+		return nil, err
+	}
+	
+	history, err := kv.History(ctx, key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get KV history: %w", err)
+	}
+	
+	return history, nil
+}
+
 

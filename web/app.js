@@ -2541,6 +2541,313 @@ const app = {
     }
 };
 
+// === Key-Value Store Management ===
+const kvManager = {
+    currentBucket: null,
+    buckets: [],
+    keys: [],
+
+    async init() {
+        await this.loadBuckets();
+        this.setupEventListeners();
+    },
+
+    setupEventListeners() {
+        const kvBtn = document.getElementById('kv-btn');
+        const kvModal = document.getElementById('kv-modal');
+        const kvClose = document.getElementById('kv-close');
+        const createBucketBtn = document.getElementById('create-bucket-btn');
+        const addKeyBtn = document.getElementById('add-kv-key-btn');
+        const refreshBtn = document.getElementById('refresh-kv-btn');
+        const deleteBucketBtn = document.getElementById('delete-bucket-btn');
+
+        if (kvBtn) {
+            kvBtn.addEventListener('click', async () => {
+                kvModal.classList.add('active');
+                await this.loadBuckets();
+            });
+        }
+
+        if (kvClose) {
+            kvClose.addEventListener('click', () => {
+                kvModal.classList.remove('active');
+            });
+        }
+
+        if (createBucketBtn) {
+            createBucketBtn.addEventListener('click', () => this.showCreateBucketDialog());
+        }
+
+        if (addKeyBtn) {
+            addKeyBtn.addEventListener('click', () => this.showAddKeyDialog());
+        }
+
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', async () => {
+                if (this.currentBucket) {
+                    await this.loadKeys(this.currentBucket);
+                }
+            });
+        }
+
+        if (deleteBucketBtn) {
+            deleteBucketBtn.addEventListener('click', () => this.deleteBucket());
+        }
+    },
+
+    async loadBuckets() {
+        try {
+            const profile = app.state.currentProfile;
+            if (!profile) {
+                throw new Error('No profile selected');
+            }
+            const response = await fetch(`/api/kv/buckets?profile=${encodeURIComponent(profile)}`);
+            const data = await response.json();
+            this.buckets = data.buckets || [];
+            this.renderBuckets();
+        } catch (error) {
+            console.error('Failed to load buckets:', error);
+            alert('Failed to load buckets: ' + error.message);
+        }
+    },
+
+    renderBuckets() {
+        const list = document.getElementById('kv-bucket-list');
+        if (!list) return;
+
+        if (this.buckets.length === 0) {
+            list.innerHTML = '<div style="padding: 12px; color: var(--text-muted); font-size: 12px;">No buckets found</div>';
+            return;
+        }
+
+        list.innerHTML = this.buckets.map(bucket => `
+            <div class="kv-bucket-item ${bucket === this.currentBucket ? 'active' : ''}" data-bucket="${bucket}">
+                <span class="kv-bucket-name">${bucket}</span>
+            </div>
+        `).join('');
+
+        // Add click handlers
+        list.querySelectorAll('.kv-bucket-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const bucket = item.dataset.bucket;
+                this.selectBucket(bucket);
+            });
+        });
+    },
+
+    async selectBucket(bucket) {
+        this.currentBucket = bucket;
+        this.renderBuckets();
+        
+        document.getElementById('kv-bucket-name').textContent = bucket;
+        document.getElementById('refresh-kv-btn').style.display = 'flex';
+        document.getElementById('add-kv-key-btn').style.display = 'block';
+        document.getElementById('delete-bucket-btn').style.display = 'block';
+        document.getElementById('kv-empty-state').style.display = 'none';
+        document.getElementById('kv-keys-container').style.display = 'block';
+
+        await this.loadKeys(bucket);
+    },
+
+    async loadKeys(bucket) {
+        try {
+            const profile = app.state.currentProfile;
+            if (!profile) {
+                throw new Error('No profile selected');
+            }
+            const response = await fetch(`/api/kv/buckets/${bucket}/keys?profile=${encodeURIComponent(profile)}`);
+            const data = await response.json();
+            this.keys = data.keys || [];
+            this.renderKeys();
+        } catch (error) {
+            console.error('Failed to load keys:', error);
+            alert('Failed to load keys: ' + error.message);
+        }
+    },
+
+    renderKeys() {
+        const list = document.getElementById('kv-keys-list');
+        if (!list) return;
+
+        if (this.keys.length === 0) {
+            list.innerHTML = '<div style="padding: 12px; color: var(--text-muted); font-size: 12px;">No keys in this bucket</div>';
+            return;
+        }
+
+        list.innerHTML = this.keys.map(key => `
+            <div class="kv-key-item" data-key="${key}">
+                <div class="kv-key-header">
+                    <span class="kv-key-name">${key}</span>
+                    <div class="kv-key-actions">
+                        <button class="btn-icon-sm" onclick="kvManager.viewKey('${key}')" title="View">
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M1 6s2-4 5-4 5 4 5 4-2 4-5 4-5-4-5-4z" />
+                                <circle cx="6" cy="6" r="1.5" />
+                            </svg>
+                        </button>
+                        <button class="btn-icon-sm" onclick="kvManager.editKey('${key}')" title="Edit">
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M8 1l3 3L4 11H1v-3L8 1z" />
+                            </svg>
+                        </button>
+                        <button class="btn-icon-sm" onclick="kvManager.deleteKey('${key}')" title="Delete">
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M1 3h10M4 3V2a1 1 0 011-1h2a1 1 0 011 1v1M10 3v7a1 1 0 01-1 1H3a1 1 0 01-1-1V3" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="kv-key-body" id="kv-key-${key}"></div>
+            </div>
+        `).join('');
+    },
+
+    async viewKey(key) {
+        try {
+            const profile = app.state.currentProfile;
+            const response = await fetch(`/api/kv/buckets/${this.currentBucket}/keys/${key}?profile=${encodeURIComponent(profile)}`);
+            const data = await response.json();
+            
+            const keyBody = document.getElementById(`kv-key-${key}`);
+            if (keyBody.classList.contains('expanded')) {
+                keyBody.classList.remove('expanded');
+                return;
+            }
+
+            keyBody.innerHTML = `
+                <div class="kv-key-value">${data.entry.value}</div>
+                <div class="kv-key-meta" style="margin-top: 8px; font-size: 11px; color: var(--text-muted);">
+                    Revision: ${data.entry.revision} | Created: ${new Date(data.entry.created).toLocaleString()}
+                </div>
+            `;
+            keyBody.classList.add('expanded');
+        } catch (error) {
+            console.error('Failed to get key:', error);
+            alert('Failed to get key: ' + error.message);
+        }
+    },
+
+    async editKey(key) {
+        try {
+            const profile = app.state.currentProfile;
+            const response = await fetch(`/api/kv/buckets/${this.currentBucket}/keys/${key}?profile=${encodeURIComponent(profile)}`);
+            const data = await response.json();
+            
+            const newValue = prompt(`Edit value for key "${key}":`, data.entry.value);
+            if (newValue !== null) {
+                await this.putKey(key, newValue);
+            }
+        } catch (error) {
+            console.error('Failed to edit key:', error);
+            alert('Failed to edit key: ' + error.message);
+        }
+    },
+
+    async deleteKey(key) {
+        if (!confirm(`Delete key "${key}"?`)) return;
+
+        try {
+            const profile = app.state.currentProfile;
+            const response = await fetch(`/api/kv/buckets/${this.currentBucket}/keys/${key}?profile=${encodeURIComponent(profile)}`, {
+                method: 'DELETE'
+            });
+            
+            if (!response.ok) throw new Error('Delete failed');
+            
+            await this.loadKeys(this.currentBucket);
+        } catch (error) {
+            console.error('Failed to delete key:', error);
+            alert('Failed to delete key: ' + error.message);
+        }
+    },
+
+    async putKey(key, value) {
+        try {
+            const profile = app.state.currentProfile;
+            const response = await fetch(`/api/kv/buckets/${this.currentBucket}/keys/${key}?profile=${encodeURIComponent(profile)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ value })
+            });
+            
+            if (!response.ok) throw new Error('Put failed');
+            
+            await this.loadKeys(this.currentBucket);
+        } catch (error) {
+            console.error('Failed to put key:', error);
+            alert('Failed to put key: ' + error.message);
+        }
+    },
+
+    showCreateBucketDialog() {
+        const bucketName = prompt('Enter bucket name:');
+        if (!bucketName) return;
+
+        const historyStr = prompt('Max history per key (default: 1):', '1');
+        const maxHistory = parseInt(historyStr) || 1;
+
+        this.createBucket(bucketName, maxHistory);
+    },
+
+    async createBucket(bucketName, maxHistoryPerKey) {
+        try {
+            const profile = app.state.currentProfile;
+            const response = await fetch('/api/kv/buckets', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    profile: profile,
+                    bucket_name: bucketName, 
+                    max_history_per_key: maxHistoryPerKey 
+                })
+            });
+            
+            if (!response.ok) throw new Error('Create failed');
+            
+            await this.loadBuckets();
+            this.selectBucket(bucketName);
+        } catch (error) {
+            console.error('Failed to create bucket:', error);
+            alert('Failed to create bucket: ' + error.message);
+        }
+    },
+
+    async deleteBucket() {
+        if (!confirm(`Delete bucket "${this.currentBucket}"?`)) return;
+
+        try {
+            const profile = app.state.currentProfile;
+            const response = await fetch(`/api/kv/buckets/${this.currentBucket}?profile=${encodeURIComponent(profile)}`, {
+                method: 'DELETE'
+            });
+            
+            if (!response.ok) throw new Error('Delete failed');
+            
+            this.currentBucket = null;
+            document.getElementById('kv-empty-state').style.display = 'flex';
+            document.getElementById('kv-keys-container').style.display = 'none';
+            document.getElementById('refresh-kv-btn').style.display = 'none';
+            document.getElementById('add-kv-key-btn').style.display = 'none';
+            document.getElementById('delete-bucket-btn').style.display = 'none';
+            
+            await this.loadBuckets();
+        } catch (error) {
+            console.error('Failed to delete bucket:', error);
+            alert('Failed to delete bucket: ' + error.message);
+        }
+    },
+
+    showAddKeyDialog() {
+        const key = prompt('Enter key name:');
+        if (!key) return;
+
+        const value = prompt('Enter value:');
+        if (value === null) return;
+
+        this.putKey(key, value);
+    }
+};
+
 // Initialize on load
 // Initialize on load
 // Initialize on load
@@ -2548,8 +2855,10 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         console.log("DOM Ready");
         app.init();
+        kvManager.init();
     });
 } else {
     console.log('[Init] DOM already ready, forcing init...');
     app.init();
+    kvManager.init();
 }

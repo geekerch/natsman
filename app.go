@@ -15,15 +15,17 @@ type App struct {
 	service    *service.RequestService
 	subService *service.SubscribeService
 	jsService  *service.JetStreamService
+	kvService  *service.KVService
 }
 
 // NewApp creates a new App application struct
-func NewApp(store *store.Store, service *service.RequestService, subService *service.SubscribeService, jsService *service.JetStreamService) *App {
+func NewApp(store *store.Store, service *service.RequestService, subService *service.SubscribeService, jsService *service.JetStreamService, kvService *service.KVService) *App {
 	return &App{
 		store:      store,
 		service:    service,
 		subService: subService,
 		jsService:  jsService,
+		kvService:  kvService,
 	}
 }
 
@@ -195,6 +197,85 @@ func (a *App) CreateJSConsumer(req service.ConsumerCreateRequest) error {
 func (a *App) DeleteJSConsumer(streamName, consumerName string) error {
 	cfg := natsclient.Config{}
 	return a.jsService.DeleteConsumer(streamName, consumerName, cfg)
+}
+
+// --- KV Operations ---
+
+func (a *App) CreateKVBucket(bucketName string, maxHistoryPerKey int) error {
+	return a.kvService.CreateKVBucket(service.CreateKVBucketRequest{
+		BucketName:       bucketName,
+		MaxHistoryPerKey: maxHistoryPerKey,
+	})
+}
+
+func (a *App) DeleteKVBucket(bucketName string) error {
+	return a.kvService.DeleteKVBucket(service.DeleteKVBucketRequest{
+		BucketName: bucketName,
+	})
+}
+
+func (a *App) ListKVBuckets() ([]string, error) {
+	// TODO: Add profile parameter support
+	resp, err := a.kvService.ListKVBuckets(service.ListKVBucketsRequest{Profile: "default"})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Buckets, nil
+}
+
+func (a *App) KVPut(bucketName, key, value string) (uint64, error) {
+	resp, err := a.kvService.KVPut(service.KVPutRequest{
+		BucketName: bucketName,
+		Key:        key,
+		Value:      value,
+	})
+	if err != nil {
+		return 0, err
+	}
+	return resp.Revision, nil
+}
+
+func (a *App) KVGet(bucketName, key string) (*service.KVEntry, error) {
+	resp, err := a.kvService.KVGet(service.KVGetRequest{
+		BucketName: bucketName,
+		Key:        key,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &resp.Entry, nil
+}
+
+func (a *App) KVDelete(bucketName, key string) error {
+	return a.kvService.KVDelete(service.KVDeleteRequest{
+		BucketName: bucketName,
+		Key:        key,
+	})
+}
+
+func (a *App) KVKeys(bucketName string) ([]string, error) {
+	resp, err := a.kvService.KVKeys(service.KVKeysRequest{
+		BucketName: bucketName,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Keys, nil
+}
+
+func (a *App) KVHistory(bucketName, key string) ([]service.KVEntry, error) {
+	resp, err := a.kvService.KVHistory(service.KVHistoryRequest{
+		BucketName: bucketName,
+		Key:        key,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.History, nil
+}
+
+func (a *App) GetKVBucketInfo(bucketName string) (map[string]interface{}, error) {
+	return a.kvService.GetKVBucketInfo(service.GetKVBucketInfoRequest{Profile: "default", BucketName: bucketName})
 }
 
 // Simple test method
