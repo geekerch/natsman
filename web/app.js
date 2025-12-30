@@ -1354,6 +1354,7 @@ const app = {
                 infoSubject.textContent = subject;
                 infoSize.textContent = `${responseText.length} bytes`;
             }
+        } catch (e) {
             console.error('Failed to send request:', e);
             statusEl.textContent = 'Error';
             statusEl.className = 'response-status error';
