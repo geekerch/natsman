@@ -228,6 +228,76 @@ const Backend = {
             method: 'DELETE'
         });
         return await res.json();
+    },
+
+    // JetStream
+    async createJSStream(req) {
+        if (this.isDesktop()) return await window.go.main.App.CreateJSStream(req);
+        const res = await fetch(API_BASE + '/api/jetstream/streams', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(req)
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        return data;
+    },
+
+    async listJSStreams() {
+        if (this.isDesktop()) return await window.go.main.App.ListJSStreams();
+        const res = await fetch(API_BASE + '/api/jetstream/streams');
+        const data = await res.json();
+        return data.streams || [];
+    },
+
+    async getJSStreamInfo(name) {
+        if (this.isDesktop()) return await window.go.main.App.GetJSStreamInfo(name);
+        const res = await fetch(API_BASE + `/api/jetstream/streams/${encodeURIComponent(name)}`);
+        return await res.json();
+    },
+
+    async deleteJSStream(name) {
+        if (this.isDesktop()) return await window.go.main.App.DeleteJSStream(name);
+        const res = await fetch(API_BASE + `/api/jetstream/streams/${encodeURIComponent(name)}`, {
+            method: 'DELETE'
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        return data;
+    },
+
+    async jsPublish(req) {
+        if (this.isDesktop()) return await window.go.main.App.JSPublish(req);
+        const res = await fetch(API_BASE + '/api/jetstream/publish', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(req)
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        return data;
+    },
+
+    async createJSConsumer(req) {
+        if (this.isDesktop()) return await window.go.main.App.CreateJSConsumer(req);
+        const res = await fetch(API_BASE + '/api/jetstream/consumers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(req)
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        return data;
+    },
+
+    async deleteJSConsumer(streamName, consumerName) {
+        if (this.isDesktop()) return await window.go.main.App.DeleteJSConsumer(streamName, consumerName);
+        const res = await fetch(API_BASE + `/api/jetstream/consumers/${encodeURIComponent(streamName)}/${encodeURIComponent(consumerName)}`, {
+            method: 'DELETE'
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        return data;
     }
 };
 
@@ -253,11 +323,14 @@ const app = {
         natsProfiles: [],
         activeNatsProfile: '',
         // Pub/Sub
-        mode: 'request', // 'request' or 'pubsub'
+        mode: 'request', // 'request', 'pubsub', or 'jetstream'
         activeSubscriptions: [],
         selectedSubscription: null,
         subscriptionMessages: {},
-        messageRefreshInterval: null
+        messageRefreshInterval: null,
+        // JetStream
+        jsStreams: [],
+        jsSelectedStream: null
     },
 
     showToast: (message, type = 'info') => {
@@ -1216,41 +1289,71 @@ const app = {
         const infoSubject = document.getElementById('info-subject');
         const infoSize = document.getElementById('info-size');
 
-        statusEl.textContent = mode === 'pubsub' ? 'Publishing...' : 'Sending...';
+        statusEl.textContent = mode === 'jetstream' ? 'Publishing to JetStream...' : (mode === 'pubsub' ? 'Publishing...' : 'Sending...');
         statusEl.className = 'response-status';
         timeEl.textContent = '';
         outputEl.textContent = 'Waiting for response...';
         outputEl.className = 'response-code';
 
         try {
-            const result = await Backend.sendRequest({
-                mode,
-                subject,
-                body,
-                variables: { ...app.state.globalVars, ...app.state.localVars },
-                config: {
-                    url: document.getElementById('config-url').value,
-                    creds_path: document.getElementById('config-creds').value
+            let result;
+            
+            if (mode === 'jetstream') {
+                // Use JetStream publish
+                result = await Backend.jsPublish({
+                    subject,
+                    body,
+                    variables: { ...app.state.globalVars, ...app.state.localVars },
+                    config: {
+                        url: document.getElementById('config-url').value,
+                        creds_path: document.getElementById('config-creds').value
+                    }
+                });
+                
+                // Format JetStream response
+                statusEl.textContent = `Status: ${result.status || 'published'}`;
+                statusEl.className = 'response-status success';
+                timeEl.textContent = '';
+                
+                const jsResponse = {
+                    stream: result.stream,
+                    sequence: result.sequence,
+                    status: result.status
+                };
+                outputEl.textContent = JSON.stringify(jsResponse, null, 2);
+                outputEl.className = 'response-code success';
+                infoSubject.textContent = subject;
+                infoSize.textContent = `Stream: ${result.stream}, Seq: ${result.sequence}`;
+            } else {
+                // Use regular request or pubsub
+                result = await Backend.sendRequest({
+                    mode,
+                    subject,
+                    body,
+                    variables: { ...app.state.globalVars, ...app.state.localVars },
+                    config: {
+                        url: document.getElementById('config-url').value,
+                        creds_path: document.getElementById('config-creds').value
+                    }
+                });
+
+                statusEl.textContent = `Status: ${result.status || 'OK'}`;
+                statusEl.className = 'response-status success';
+                timeEl.textContent = result.elapsed || '';
+
+                let responseText = result.reply || '';
+                if (responseText && typeof responseText === 'string') {
+                    try {
+                        const obj = JSON.parse(responseText);
+                        responseText = JSON.stringify(obj, null, 2);
+                    } catch { }
                 }
-            });
 
-            statusEl.textContent = `Status: ${result.status || 'OK'}`;
-            statusEl.className = 'response-status success';
-            timeEl.textContent = result.elapsed || '';
-
-            let responseText = result.reply || '';
-            if (responseText && typeof responseText === 'string') {
-                try {
-                    const obj = JSON.parse(responseText);
-                    responseText = JSON.stringify(obj, null, 2);
-                } catch { }
+                outputEl.textContent = responseText;
+                outputEl.className = 'response-code success';
+                infoSubject.textContent = subject;
+                infoSize.textContent = `${responseText.length} bytes`;
             }
-
-            outputEl.textContent = responseText;
-            outputEl.className = 'response-code success';
-            infoSubject.textContent = subject;
-            infoSize.textContent = `${responseText.length} bytes`;
-        } catch (e) {
             console.error('Failed to send request:', e);
             statusEl.textContent = 'Error';
             statusEl.className = 'response-status error';
@@ -1270,6 +1373,8 @@ const app = {
         
         if (mode === 'pubsub') {
             sendBtnText.textContent = 'Publish';
+        } else if (mode === 'jetstream') {
+            sendBtnText.textContent = 'JS Publish';
         } else {
             sendBtnText.textContent = 'Send Request';
         }
@@ -1485,6 +1590,175 @@ const app = {
         } catch (e) {
             console.error('Failed to clear messages:', e);
             app.showToast(`Failed to clear messages: ${e.message}`, 'error');
+        }
+    },
+
+    // JetStream Functions
+    openJetStream: async () => {
+        await app.loadJSStreams();
+        document.getElementById('jetstream-modal').classList.add('active');
+    },
+
+    closeJetStream: () => {
+        document.getElementById('jetstream-modal').classList.remove('active');
+    },
+
+    switchJSTab: (tabName) => {
+        document.querySelectorAll('.js-tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        document.querySelectorAll('.js-tab-pane').forEach(pane => {
+            pane.classList.remove('active');
+        });
+        
+        const activeTab = document.querySelector(`.js-tab[data-tab="${tabName}"]`);
+        const activePane = document.querySelector(`.js-tab-pane[data-pane="${tabName}"]`);
+        
+        if (activeTab) activeTab.classList.add('active');
+        if (activePane) activePane.classList.add('active');
+        
+        if (tabName === 'consumers') {
+            app.updateConsumerStreamSelect();
+        }
+    },
+
+    loadJSStreams: async () => {
+        try {
+            app.state.jsStreams = await Backend.listJSStreams();
+            app.renderJSStreams();
+        } catch (e) {
+            console.error('Failed to load streams:', e);
+            app.showToast(`Failed to load streams: ${e.message}`, 'error');
+        }
+    },
+
+    renderJSStreams: () => {
+        const listEl = document.getElementById('streams-list');
+        if (!listEl) return;
+
+        if (app.state.jsStreams.length === 0) {
+            listEl.innerHTML = '<p class="empty-state">No streams created yet</p>';
+            return;
+        }
+
+        listEl.innerHTML = app.state.jsStreams.map(stream => `
+            <div class="stream-item">
+                <div class="stream-name">${stream}</div>
+                <button class="btn-icon-sm delete-stream-btn" data-stream="${stream}" title="Delete">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="3" y1="3" x2="9" y2="9" />
+                        <line x1="9" y1="3" x2="3" y2="9" />
+                    </svg>
+                </button>
+            </div>
+        `).join('');
+
+        listEl.querySelectorAll('.delete-stream-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await app.deleteJSStream(btn.dataset.stream);
+            });
+        });
+    },
+
+    createJSStream: async () => {
+        const name = document.getElementById('stream-name').value.trim();
+        const subjectsStr = document.getElementById('stream-subjects').value.trim();
+        const storage = document.getElementById('stream-storage').value;
+
+        if (!name) {
+            app.showToast('Please enter stream name', 'error');
+            return;
+        }
+        if (!subjectsStr) {
+            app.showToast('Please enter subjects', 'error');
+            return;
+        }
+
+        const subjects = subjectsStr.split(',').map(s => s.trim()).filter(s => s);
+
+        try {
+            await Backend.createJSStream({
+                name,
+                subjects,
+                storage,
+                replicas: 1,
+                config: {}
+            });
+            
+            app.showToast(`Stream "${name}" created`, 'success');
+            
+            // Clear inputs
+            document.getElementById('stream-name').value = '';
+            document.getElementById('stream-subjects').value = '';
+            
+            await app.loadJSStreams();
+        } catch (e) {
+            console.error('Failed to create stream:', e);
+            app.showToast(`Failed to create stream: ${e.message}`, 'error');
+        }
+    },
+
+    deleteJSStream: async (name) => {
+        const confirmed = await app.showConfirm(`Delete stream "${name}"?`);
+        if (!confirmed) return;
+
+        try {
+            await Backend.deleteJSStream(name);
+            app.showToast(`Stream "${name}" deleted`, 'success');
+            await app.loadJSStreams();
+        } catch (e) {
+            console.error('Failed to delete stream:', e);
+            app.showToast(`Failed to delete stream: ${e.message}`, 'error');
+        }
+    },
+
+    updateConsumerStreamSelect: async () => {
+        const select = document.getElementById('consumer-stream');
+        if (!select) return;
+
+        await app.loadJSStreams();
+
+        select.innerHTML = '<option value="">Select a stream...</option>';
+        app.state.jsStreams.forEach(stream => {
+            const option = document.createElement('option');
+            option.value = stream;
+            option.textContent = stream;
+            select.appendChild(option);
+        });
+    },
+
+    createJSConsumer: async () => {
+        const streamName = document.getElementById('consumer-stream').value;
+        const name = document.getElementById('consumer-name').value.trim();
+        const deliverPolicy = document.getElementById('consumer-deliver-policy').value;
+        const ackPolicy = document.getElementById('consumer-ack-policy').value;
+
+        if (!streamName) {
+            app.showToast('Please select a stream', 'error');
+            return;
+        }
+        if (!name) {
+            app.showToast('Please enter consumer name', 'error');
+            return;
+        }
+
+        try {
+            await Backend.createJSConsumer({
+                stream_name: streamName,
+                name,
+                deliver_policy: deliverPolicy,
+                ack_policy: ackPolicy,
+                config: {}
+            });
+            
+            app.showToast(`Consumer "${name}" created`, 'success');
+            
+            // Clear input
+            document.getElementById('consumer-name').value = '';
+        } catch (e) {
+            console.error('Failed to create consumer:', e);
+            app.showToast(`Failed to create consumer: ${e.message}`, 'error');
         }
     },
 
@@ -1841,6 +2115,27 @@ const app = {
             
             const clearBtn = document.getElementById('clear-messages-btn');
             if (clearBtn) clearBtn.onclick = app.clearMessages;
+
+            // JetStream Modal
+            document.getElementById('jetstream-btn').onclick = app.openJetStream;
+            document.getElementById('jetstream-close').onclick = app.closeJetStream;
+            document.getElementById('close-jetstream-btn').onclick = app.closeJetStream;
+            document.querySelector('#jetstream-modal .modal-backdrop').onclick = app.closeJetStream;
+
+            // JetStream tabs
+            document.querySelectorAll('.js-tab').forEach(tab => {
+                tab.onclick = () => app.switchJSTab(tab.dataset.tab);
+            });
+
+            // JetStream actions
+            const createStreamBtn = document.getElementById('create-stream-btn');
+            if (createStreamBtn) createStreamBtn.onclick = app.createJSStream;
+
+            const refreshStreamsBtn = document.getElementById('refresh-streams-btn');
+            if (refreshStreamsBtn) refreshStreamsBtn.onclick = app.loadJSStreams;
+
+            const createConsumerBtn = document.getElementById('create-consumer-btn');
+            if (createConsumerBtn) createConsumerBtn.onclick = app.createJSConsumer;
 
             console.log('[SetupEvents] Finished setupEventListeners');
         } catch (e) {

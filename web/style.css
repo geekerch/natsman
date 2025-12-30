@@ -1432,4 +1432,121 @@ body {
     font-size: 13px;
 }
 
+/* JetStream Styles */
+.jetstream-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.js-tab {
+    padding: 10px 20px;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+}
+
+.js-tab:hover {
+    color: var(--text-primary);
+}
+
+.js-tab.active {
+    color: var(--accent-blue);
+    border-bottom-color: var(--accent-blue);
+}
+
+.js-tab-pane {
+    display: none;
+}
+
+.js-tab-pane.active {
+    display: block;
+}
+
+.js-section {
+    background-color: var(--bg-tertiary);
+    border-radius: 4px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 15px;
+}
+
+.form-select {
+    width: 100%;
+    padding: 8px 32px 8px 12px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: var(--font-sans);
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 6L11 1' stroke='%239d9d9d' stroke-width='2'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    transition: all 0.2s;
+}
+
+.form-select:hover {
+    border-color: var(--accent-blue);
+}
+
+.form-select:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+}
+
+.streams-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.stream-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    margin-bottom: 8px;
+    transition: all 0.2s;
+}
+
+.stream-item:hover {
+    background-color: var(--bg-elevated);
+    border-color: var(--accent-blue);
+}
+
+.stream-name {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.delete-stream-btn {
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+.stream-item:hover .delete-stream-btn {
+    opacity: 1;
+}
+
+
 }
