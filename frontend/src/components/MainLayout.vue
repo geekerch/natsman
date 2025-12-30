@@ -1,31 +1,22 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NSpace, NButton } from 'naive-ui'
 
+const router = useRouter()
 const collapsed = ref(false)
 
 const menuOptions = [
-  {
-    label: 'Requests',
-    key: 'requests',
-  },
-  {
-    label: 'Pub/Sub',
-    key: 'pubsub',
-  },
-  {
-    label: 'JetStream',
-    key: 'jetstream',
-  },
-  {
-    label: 'KV Store',
-    key: 'kv',
-  },
-  {
-    label: 'Settings',
-    key: 'settings',
-  }
+  { label: 'Requests', key: 'requests' },
+  { label: 'Pub/Sub', key: 'pubsub' },
+  { label: 'JetStream', key: 'jetstream' },
+  { label: 'KV Store', key: 'kv' },
+  { label: 'Settings', key: 'settings' }
 ]
+
+const handleMenuUpdate = (key: string) => {
+  router.push(`/${key}`)
+}
 </script>
 
 <template>
@@ -46,6 +37,7 @@ const menuOptions = [
         :collapsed-width="64"
         :collapsed-icon-size="22"
         :options="menuOptions"
+        @update:value="handleMenuUpdate"
       />
     </n-layout-sider>
     <n-layout>
@@ -55,9 +47,8 @@ const menuOptions = [
           <n-button type="primary" size="small">Connect</n-button>
         </n-space>
       </n-layout-header>
-      <n-layout-content content-style="padding: 24px;">
-        <div class="text-2xl font-bold mb-4">Welcome to NATS Manager</div>
-        <p>Select a module from the sidebar to get started.</p>
+      <n-layout-content content-style="padding: 0;">
+        <router-view />
       </n-layout-content>
     </n-layout>
   </n-layout>
