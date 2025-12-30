@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"natsman/pkg/executor"
 	"natsman/pkg/natsclient"
 	"natsman/pkg/store"
 
@@ -13,8 +14,18 @@ import (
 )
 
 type JetStreamService struct {
-	store *store.Store
-	mu    sync.RWMutex
+	store    *store.Store
+	executor *executor.Executor
+	mu       sync.RWMutex
+	// Cache for fetched messages
+	messageCache map[string]*CachedMessages
+	cacheMu      sync.RWMutex
+}
+
+type CachedMessages struct {
+	Messages  []StreamMessage
+	Timestamp time.Time
+	Total     uint64
 }
 
 type StreamInfo struct {
@@ -49,10 +60,10 @@ type ConsumerCreateRequest struct {
 }
 
 type JSPublishRequest struct {
-	Subject   string                `json:"subject"`
-	Body      string                `json:"body"`
-	Variables map[string]string     `json:"variables"`
-	Config    natsclient.Config     `json:"config"`
+	Subject   string                    `json:"subject"`
+	Body      string                    `json:"body"`
+	Variables map[string]store.Variable `json:"variables"`
+	Config    natsclient.Config         `json:"config"`
 }
 
 type JSPublishResponse struct {
@@ -61,9 +72,34 @@ type JSPublishResponse struct {
 	Status   string `json:"status"`
 }
 
-func NewJetStreamService(store *store.Store) *JetStreamService {
+type StreamMessage struct {
+	Sequence  uint64 `json:"sequence"`
+	Subject   string `json:"subject"`
+	Data      string `json:"data"`
+	Time      string `json:"time"`
+	Size      int    `json:"size"`
+}
+
+type GetMessagesRequest struct {
+	StreamName string            `json:"stream_name"`
+	Limit      int               `json:"limit"`
+	StartSeq   uint64            `json:"start_seq"` // Start from this sequence (for pagination)
+	Config     natsclient.Config `json:"config"`
+}
+
+type GetMessagesResponse struct {
+	Messages   []StreamMessage `json:"messages"`
+	Total      uint64          `json:"total"`
+	StartSeq   uint64          `json:"start_seq"`
+	EndSeq     uint64          `json:"end_seq"`
+	HasMore    bool            `json:"has_more"`
+}
+
+func NewJetStreamService(store *store.Store, executor *executor.Executor) *JetStreamService {
 	return &JetStreamService{
-		store: store,
+		store:        store,
+		executor:     executor,
+		messageCache: make(map[string]*CachedMessages),
 	}
 }
 
@@ -230,12 +266,45 @@ func (s *JetStreamService) PublishToJetStream(req JSPublishRequest) (*JSPublishR
 	}
 	defer client.Close()
 
-	// Parse variables in subject and body (similar to request_service)
-	subject := req.Subject
-	body := req.Body
-	
-	// TODO: Apply variable substitution if needed
-	// For now, just use the values as-is
+	// Process variables (same as request_service)
+	globalVars := s.store.GetGlobalVars()
+	finalVars := make(map[string]string)
+
+	evaluateVar := func(key string, v store.Variable) (string, error) {
+		if v.Type == "dynamic" {
+			return s.executor.Eval(v.Value)
+		}
+		return v.Value, nil
+	}
+
+	// 1. Process Global Variables
+	for k, v := range globalVars {
+		val, err := evaluateVar(k, v)
+		if err != nil {
+			return nil, fmt.Errorf("global variable '%s' error: %v", k, err)
+		}
+		finalVars[k] = val
+	}
+
+	// 2. Process Local Variables (Override globals)
+	for k, v := range req.Variables {
+		val, err := evaluateVar(k, v)
+		if err != nil {
+			return nil, fmt.Errorf("local variable '%s' error: %v", k, err)
+		}
+		finalVars[k] = val
+	}
+
+	// 3. Apply template substitution
+	subject, err := ProcessTemplate(req.Subject, finalVars)
+	if err != nil {
+		return nil, fmt.Errorf("subject template error: %w", err)
+	}
+
+	body, err := ProcessTemplate(req.Body, finalVars)
+	if err != nil {
+		return nil, fmt.Errorf("body template error: %w", err)
+	}
 
 	ack, err := client.JSPublish(subject, []byte(body))
 	if err != nil {
@@ -334,4 +403,214 @@ func (s *JetStreamService) DeleteConsumer(streamName, consumerName string, cfg n
 	}
 
 	return nil
+}
+
+// GetStreamMessages retrieves messages from a stream
+func (s *JetStreamService) GetStreamMessages(req GetMessagesRequest) (*GetMessagesResponse, error) {
+	// Get config from store if not provided
+	cfg := req.Config
+	if cfg.URL == "" {
+		cfg.URL, _ = s.store.GetNatsConfig()
+		if cfg.URL == "" {
+			cfg.URL = "nats://localhost:4222"
+		}
+	}
+	if cfg.CredsPath == "" {
+		_, cfg.CredsPath = s.store.GetNatsConfig()
+	}
+
+	client, err := natsclient.Connect(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect: %w", err)
+	}
+	defer client.Close()
+
+	// Get stream info to get total message count
+	stream, err := client.GetStream(req.StreamName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get stream: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	info, err := stream.Info(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get stream info: %w", err)
+	}
+
+	// Get messages
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 10
+	}
+
+	// Determine start sequence
+	startSeq := req.StartSeq
+	if startSeq == 0 {
+		startSeq = 1 // Start from first message if not specified
+	}
+
+	msgs, err := client.GetStreamMessages(req.StreamName, limit, startSeq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get messages: %w", err)
+	}
+
+	// Convert to response format
+	messages := make([]StreamMessage, 0, len(msgs))
+	var firstSeq, lastSeq uint64
+	for i, msg := range msgs {
+		meta, _ := msg.Metadata()
+		seq := meta.Sequence.Stream
+		if i == 0 {
+			firstSeq = seq
+		}
+		lastSeq = seq
+		messages = append(messages, StreamMessage{
+			Sequence: seq,
+			Subject:  msg.Subject(),
+			Data:     string(msg.Data()),
+			Time:     meta.Timestamp.Format(time.RFC3339),
+			Size:     len(msg.Data()),
+		})
+	}
+
+	// Determine if there are more messages
+	hasMore := false
+	if len(messages) > 0 && lastSeq < info.State.LastSeq {
+		hasMore = true
+	}
+
+	return &GetMessagesResponse{
+		Messages: messages,
+		Total:    info.State.Msgs,
+		StartSeq: firstSeq,
+		EndSeq:   lastSeq,
+		HasMore:  hasMore,
+	}, nil
+}
+
+// FetchAllMessages fetches all messages from a stream using a consumer and caches them
+func (s *JetStreamService) FetchAllMessages(streamName string, cfg natsclient.Config, refresh bool) (*GetMessagesResponse, error) {
+	// Check cache first unless refresh is requested
+	if !refresh {
+		s.cacheMu.RLock()
+		cached, exists := s.messageCache[streamName]
+		s.cacheMu.RUnlock()
+		
+		if exists {
+			return &GetMessagesResponse{
+				Messages: cached.Messages,
+				Total:    cached.Total,
+				StartSeq: cached.Messages[0].Sequence,
+				EndSeq:   cached.Messages[len(cached.Messages)-1].Sequence,
+				HasMore:  false,
+			}, nil
+		}
+	}
+
+	// Get config from store if not provided
+	if cfg.URL == "" {
+		cfg.URL, _ = s.store.GetNatsConfig()
+		if cfg.URL == "" {
+			cfg.URL = "nats://localhost:4222"
+		}
+	}
+	if cfg.CredsPath == "" {
+		_, cfg.CredsPath = s.store.GetNatsConfig()
+	}
+
+	client, err := natsclient.Connect(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect: %w", err)
+	}
+	defer client.Close()
+
+	// Get stream
+	stream, err := client.GetStream(streamName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get stream: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Get stream info
+	info, err := stream.Info(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get stream info: %w", err)
+	}
+
+	if info.State.Msgs == 0 {
+		return &GetMessagesResponse{
+			Messages: []StreamMessage{},
+			Total:    0,
+			StartSeq: 0,
+			EndSeq:   0,
+			HasMore:  false,
+		}, nil
+	}
+
+	// Create a temporary consumer to fetch all messages
+	consumerName := fmt.Sprintf("temp_viewer_%d", time.Now().Unix())
+	consumer, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
+		Name:          consumerName,
+		DeliverPolicy: jetstream.DeliverAllPolicy,
+		AckPolicy:     jetstream.AckNonePolicy,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create consumer: %w", err)
+	}
+
+	// Fetch all messages
+	messages := make([]StreamMessage, 0, info.State.Msgs)
+	fetchCtx, fetchCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer fetchCancel()
+
+	msgBatch, err := consumer.Fetch(int(info.State.Msgs), jetstream.FetchMaxWait(5*time.Second))
+	if err != nil {
+		// Try to clean up consumer
+		stream.DeleteConsumer(ctx, consumerName)
+		return nil, fmt.Errorf("failed to fetch messages: %w", err)
+	}
+
+	for msg := range msgBatch.Messages() {
+		meta, _ := msg.Metadata()
+		messages = append(messages, StreamMessage{
+			Sequence: meta.Sequence.Stream,
+			Subject:  msg.Subject(),
+			Data:     string(msg.Data()),
+			Time:     meta.Timestamp.Format(time.RFC3339),
+			Size:     len(msg.Data()),
+		})
+	}
+
+	// Clean up consumer
+	if err := stream.DeleteConsumer(fetchCtx, consumerName); err != nil {
+		// Log but don't fail - consumer will be deleted eventually
+		fmt.Printf("Warning: failed to delete temporary consumer %s: %v\n", consumerName, err)
+	}
+
+	// Cache the results
+	s.cacheMu.Lock()
+	s.messageCache[streamName] = &CachedMessages{
+		Messages:  messages,
+		Timestamp: time.Now(),
+		Total:     info.State.Msgs,
+	}
+	s.cacheMu.Unlock()
+
+	var startSeq, endSeq uint64
+	if len(messages) > 0 {
+		startSeq = messages[0].Sequence
+		endSeq = messages[len(messages)-1].Sequence
+	}
+
+	return &GetMessagesResponse{
+		Messages: messages,
+		Total:    info.State.Msgs,
+		StartSeq: startSeq,
+		EndSeq:   endSeq,
+		HasMore:  false,
+	}, nil
 }

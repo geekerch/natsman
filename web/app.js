@@ -298,6 +298,31 @@ const Backend = {
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         return data;
+    },
+
+    async getStreamMessages(streamName, limit = 10, startSeq = 1) {
+        if (this.isDesktop()) {
+            return await window.go.main.App.GetStreamMessages({
+                stream_name: streamName,
+                limit: limit,
+                start_seq: startSeq,
+                config: {}
+            });
+        }
+        const res = await fetch(API_BASE + `/api/jetstream/streams/${encodeURIComponent(streamName)}/messages?limit=${limit}&start_seq=${startSeq}`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        return data;
+    },
+
+    async fetchAllStreamMessages(streamName, refresh = false) {
+        if (this.isDesktop()) {
+            return await window.go.main.App.FetchAllStreamMessages(streamName, refresh);
+        }
+        const res = await fetch(API_BASE + `/api/jetstream/streams/${encodeURIComponent(streamName)}/messages/all?refresh=${refresh}`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        return data;
     }
 };
 
@@ -330,7 +355,13 @@ const app = {
         messageRefreshInterval: null,
         // JetStream
         jsStreams: [],
-        jsSelectedStream: null
+        jsSelectedStream: null,
+        currentStreamName: null,
+        currentPage: 1,
+        currentStartSeq: 1,
+        currentMessagesResult: null,
+        loadingMessages: false,
+        allMessages: []
     },
 
     showToast: (message, type = 'info') => {
@@ -736,7 +767,10 @@ const app = {
 
         // Click handler
         if (!node.is_folder) {
-            item.onclick = () => app.selectTemplate(node.path);
+            item.onclick = () => {
+                console.log('[TreeNode] File clicked:', node.path);
+                app.selectTemplate(node.path);
+            };
         } else {
             item.onclick = (e) => {
                 // Clicking folder row (not name/toggle) allows selecting folder context? 
@@ -843,8 +877,11 @@ const app = {
     },
 
     selectTemplate: async (path) => {
+        console.log('[selectTemplate] Called with path:', path);
         try {
+            console.log('[selectTemplate] Fetching template...');
             const template = await Backend.getTemplate(path);
+            console.log('[selectTemplate] Template loaded:', template);
 
             app.state.currentPath = path;
             app.state.currentTemplate = template;
@@ -864,8 +901,10 @@ const app = {
             app.state.localVars = {};
             app.renderTree();
             app.parseVariables();
+            console.log('[selectTemplate] Template loaded successfully');
         } catch (e) {
-            console.error('Failed to load template:', e);
+            console.error('[selectTemplate] Failed to load template:', e);
+            app.showToast(`Failed to load template: ${e.message}`, 'error');
         }
     },
 
@@ -1354,6 +1393,7 @@ const app = {
                 infoSubject.textContent = subject;
                 infoSize.textContent = `${responseText.length} bytes`;
             }
+        } catch (e) {
             console.error('Failed to send request:', e);
             statusEl.textContent = 'Error';
             statusEl.className = 'response-status error';
@@ -1603,6 +1643,214 @@ const app = {
         document.getElementById('jetstream-modal').classList.remove('active');
     },
 
+    openStreamMessages: async (streamName) => {
+        app.state.currentStreamName = streamName;
+        app.state.currentPage = 1;
+        app.state.currentStartSeq = 1;
+        app.state.currentMessagesResult = null;
+        document.getElementById('stream-messages-title').textContent = streamName;
+        document.getElementById('stream-messages-modal').classList.add('active');
+        await app.loadStreamMessages();
+    },
+
+    closeStreamMessages: () => {
+        document.getElementById('stream-messages-modal').classList.remove('active');
+        
+        // Clear all cached data
+        app.state.currentStreamName = null;
+        app.state.currentPage = 1;
+        app.state.currentStartSeq = 1;
+        app.state.currentMessagesResult = null;
+        app.state.cachedMessages = null;
+        
+        // Clear UI
+        const messagesList = document.getElementById('stream-messages-list');
+        if (messagesList) {
+            messagesList.innerHTML = '\n                    <!-- Messages will be rendered here -->\n                ';
+        }
+        
+        console.log('[CloseMessages] Cleared all cached data');
+    },
+
+    loadStreamMessages: async (refresh = false) => {
+        if (!app.state.currentStreamName) return;
+        
+        // Prevent concurrent requests
+        if (app.state.loadingMessages) {
+            console.log('[LoadMessages] Already loading, skipping...');
+            return;
+        }
+        
+        console.log('[LoadMessages] Starting:', {
+            streamName: app.state.currentStreamName,
+            refresh
+        });
+
+        app.state.loadingMessages = true;
+        
+        // Show loading indicator
+        const messagesList = document.getElementById('stream-messages-list');
+        const prevBtn = document.querySelector('#pagination-controls .prev-page');
+        const nextBtn = document.querySelector('#pagination-controls .next-page');
+        const refreshBtn = document.getElementById('refresh-stream-messages-btn');
+        if (prevBtn) prevBtn.disabled = true;
+        if (nextBtn) nextBtn.disabled = true;
+        if (refreshBtn) refreshBtn.disabled = true;
+        if (messagesList) {
+            messagesList.innerHTML = '<div style="text-align: center; padding: 40px; color: #888;"><div style="margin-bottom: 10px;">⏳</div>Loading messages...</div>';
+        }
+        
+        try {
+            console.log('[LoadMessages] Fetching all messages...');
+            
+            const result = await Backend.fetchAllStreamMessages(app.state.currentStreamName, refresh);
+            
+            console.log('[LoadMessages] Got result:', {
+                total: result.total,
+                count: result.messages?.length
+            });
+            
+            app.state.allMessages = result.messages || [];
+            app.state.currentPage = 1;
+            
+            const totalEl = document.getElementById('stream-total-messages');
+            if (totalEl) totalEl.textContent = result.total || 0;
+            app.renderMessagesPage();
+        } catch (e) {
+            console.error('[LoadMessages] ERROR:', e);
+            app.showToast(`Failed to load messages: ${e.message}`, 'error');
+            if (messagesList) {
+                messagesList.innerHTML = '<div style="text-align: center; padding: 40px; color: #888;">Failed to load messages</div>';
+            }
+        } finally {
+            console.log('[LoadMessages] Finally block');
+            app.state.loadingMessages = false;
+            if (refreshBtn) refreshBtn.disabled = false;
+        }
+    },
+
+    renderMessagesPage: () => {
+        const limit = parseInt(document.getElementById('messages-limit').value) || 10;
+        const allMessages = app.state.allMessages || [];
+        const currentPage = app.state.currentPage || 1;
+        
+        const startIdx = (currentPage - 1) * limit;
+        const endIdx = startIdx + limit;
+        const pageMessages = allMessages.slice(startIdx, endIdx);
+        
+        app.renderStreamMessages(pageMessages);
+        
+        // Update pagination controls
+        const prevBtn = document.getElementById('prev-messages-btn');
+        const nextBtn = document.getElementById('next-messages-btn');
+        const totalPages = Math.ceil(allMessages.length / limit);
+        
+        if (prevBtn) {
+            prevBtn.disabled = currentPage <= 1;
+        }
+        if (nextBtn) {
+            nextBtn.disabled = currentPage >= totalPages;
+        }
+        
+        document.getElementById('messages-page-info').textContent = 
+            `Page ${currentPage} of ${totalPages}`;
+    },
+
+    updatePaginationControls: (result) => {
+        const paginationEl = document.getElementById('pagination-controls');
+        if (!paginationEl) return;
+
+        const prevBtn = paginationEl.querySelector('.prev-page');
+        const nextBtn = paginationEl.querySelector('.next-page');
+        const pageInfo = paginationEl.querySelector('.page-info');
+
+        // Update buttons state
+        if (prevBtn) prevBtn.disabled = app.state.currentStartSeq <= 1;
+        if (nextBtn) nextBtn.disabled = !result.has_more;
+
+        // Update page info
+        if (pageInfo && result.messages && result.messages.length > 0) {
+            pageInfo.textContent = `Seq ${result.start_seq} - ${result.end_seq}`;
+        } else if (pageInfo) {
+            pageInfo.textContent = 'No messages';
+        }
+    },
+
+    nextPage: async () => {
+        app.state.currentPage = (app.state.currentPage || 1) + 1;
+        app.renderMessagesPage();
+    },
+
+    prevPage: async () => {
+        app.state.currentPage = Math.max(1, (app.state.currentPage || 1) - 1);
+        app.renderMessagesPage();
+    },
+
+    gotoPage: () => {
+        const input = document.getElementById('goto-page-input');
+        const pageNum = parseInt(input.value);
+        
+        if (isNaN(pageNum) || pageNum < 1) {
+            app.showToast('Please enter a valid page number', 'error');
+            return;
+        }
+        
+        const limit = parseInt(document.getElementById('messages-limit').value) || 10;
+        const allMessages = app.state.allMessages || [];
+        const totalPages = Math.ceil(allMessages.length / limit);
+        
+        if (pageNum > totalPages) {
+            app.showToast(`Page ${pageNum} doesn't exist. Max page: ${totalPages}`, 'error');
+            return;
+        }
+        
+        app.state.currentPage = pageNum;
+        app.renderMessagesPage();
+        input.value = ''; // Clear input after jump
+    },
+
+    renderStreamMessages: (messages) => {
+        const listEl = document.getElementById('stream-messages-list');
+        if (!listEl) return;
+
+        console.log('[Render] Rendering messages:', {
+            count: messages.length,
+            sequences: messages.map(m => m.sequence),
+            currentHTML: listEl.innerHTML.substring(0, 100)
+        });
+
+        // Fade out
+        listEl.style.opacity = '0';
+        
+        setTimeout(() => {
+            if (messages.length === 0) {
+                listEl.innerHTML = '<p class="empty-state">No messages in stream</p>';
+                listEl.style.opacity = '1';
+                return;
+            }
+
+            listEl.innerHTML = messages.map(msg => `
+            <div class="message-item">
+                <div class="message-header">
+                    <span class="message-seq">#${msg.sequence}</span>
+                    <span class="message-subject">${msg.subject}</span>
+                    <span class="message-time">${new Date(msg.time).toLocaleString()}</span>
+                    <span class="message-size">${msg.size} bytes</span>
+                </div>
+                <div class="message-data">
+                    <pre>${msg.data}</pre>
+                </div>
+            </div>
+        `).join('');
+        
+            // Fade in
+            listEl.style.opacity = '1';
+        }, 150);
+        
+        console.log('[Render] After render, first message seq:', 
+            listEl.querySelector('.message-seq')?.textContent);
+    },
+
     switchJSTab: (tabName) => {
         document.querySelectorAll('.js-tab').forEach(tab => {
             tab.classList.remove('active');
@@ -1644,14 +1892,29 @@ const app = {
         listEl.innerHTML = app.state.jsStreams.map(stream => `
             <div class="stream-item">
                 <div class="stream-name">${stream}</div>
-                <button class="btn-icon-sm delete-stream-btn" data-stream="${stream}" title="Delete">
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="3" y1="3" x2="9" y2="9" />
-                        <line x1="9" y1="3" x2="3" y2="9" />
-                    </svg>
-                </button>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn-icon-sm view-messages-btn" data-stream="${stream}" title="View Messages">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M1 6c1.5-3 4.5-3 5-3s3.5 0 5 3c-1.5 3-4.5 3-5 3s-3.5 0-5-3z"/>
+                            <circle cx="6" cy="6" r="2"/>
+                        </svg>
+                    </button>
+                    <button class="btn-icon-sm delete-stream-btn" data-stream="${stream}" title="Delete">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="3" y1="3" x2="9" y2="9" />
+                            <line x1="9" y1="3" x2="3" y2="9" />
+                        </svg>
+                    </button>
+                </div>
             </div>
         `).join('');
+
+        listEl.querySelectorAll('.view-messages-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                app.openStreamMessages(btn.dataset.stream);
+            });
+        });
 
         listEl.querySelectorAll('.delete-stream-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
@@ -2136,6 +2399,29 @@ const app = {
 
             const createConsumerBtn = document.getElementById('create-consumer-btn');
             if (createConsumerBtn) createConsumerBtn.onclick = app.createJSConsumer;
+
+            // Stream Messages Modal
+            document.getElementById('stream-messages-close').onclick = app.closeStreamMessages;
+            document.getElementById('close-stream-messages-btn').onclick = app.closeStreamMessages;
+            document.querySelector('#stream-messages-modal .modal-backdrop').onclick = app.closeStreamMessages;
+            
+            const refreshMessagesBtn = document.getElementById('refresh-stream-messages-btn');
+            if (refreshMessagesBtn) refreshMessagesBtn.onclick = () => app.loadStreamMessages(true);
+
+            // Pagination controls
+            const prevPageBtn = document.getElementById('prev-messages-btn');
+            const nextPageBtn = document.getElementById('next-messages-btn');
+            const gotoPageBtn = document.getElementById('goto-page-btn');
+            const gotoPageInput = document.getElementById('goto-page-input');
+            
+            if (prevPageBtn) prevPageBtn.onclick = app.prevPage;
+            if (nextPageBtn) nextPageBtn.onclick = app.nextPage;
+            if (gotoPageBtn) gotoPageBtn.onclick = app.gotoPage;
+            if (gotoPageInput) {
+                gotoPageInput.onkeypress = (e) => {
+                    if (e.key === 'Enter') app.gotoPage();
+                };
+            }
 
             console.log('[SetupEvents] Finished setupEventListeners');
         } catch (e) {
