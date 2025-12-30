@@ -93,11 +93,15 @@ const Backend = {
 
     async setActiveJSExtensions(extensions) {
         if (this.isDesktop()) return await window.go.main.App.SetActiveJSExtensions(extensions);
-        await fetch(API_BASE + '/api/extensions/activate', {
+        const res = await fetch(API_BASE + '/api/extensions/activate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ extensions })
         });
+        if (!res.ok) {
+            const error = await res.text();
+            throw new Error(error || `HTTP ${res.status}`);
+        }
     },
 
     // Tree / Templates
@@ -2415,6 +2419,7 @@ const app = {
     },
 
     closeExtensions: () => {
+        console.log('[closeExtensions] Closing modal');
         document.getElementById('extensions-modal').classList.remove('active');
     },
 
