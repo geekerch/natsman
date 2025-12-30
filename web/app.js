@@ -2670,26 +2670,57 @@ const app = {
 
             console.log('[SetupEvents] Modal listeners...');
             // Settings Modal
-            document.getElementById('settings-btn').onclick = app.openSettings;
-            document.getElementById('settings-close').onclick = app.closeSettings;
-            document.getElementById('cancel-settings-btn').onclick = app.closeSettings;
-            document.getElementById('save-settings-btn').onclick = app.saveSettings;
-            document.querySelector('#settings-modal .modal-backdrop').onclick = app.closeSettings;
+            const settingsBtn = document.getElementById('settings-btn');
+            const settingsClose = document.getElementById('settings-close');
+            const cancelSettingsBtn = document.getElementById('cancel-settings-btn');
+            const saveSettingsBtn = document.getElementById('save-settings-btn');
+            console.log('[SetupEvents] Settings buttons:', {settingsBtn, settingsClose, cancelSettingsBtn, saveSettingsBtn});
+            
+            if (settingsBtn) settingsBtn.onclick = app.openSettings;
+            if (settingsClose) settingsClose.onclick = app.closeSettings;
+            if (cancelSettingsBtn) cancelSettingsBtn.onclick = app.closeSettings;
+            if (saveSettingsBtn) {
+                console.log('[SetupEvents] Binding save-settings-btn to:', app.saveSettings);
+                saveSettingsBtn.onclick = app.saveSettings;
+            }
+            const settingsBackdrop = document.querySelector('#settings-modal .modal-backdrop');
+            if (settingsBackdrop) settingsBackdrop.onclick = app.closeSettings;
 
             // Globals Modal
-            document.getElementById('globals-btn').onclick = app.openGlobals;
-            document.querySelector('#globals-close').onclick = app.closeGlobals;
-            document.getElementById('cancel-globals-btn').onclick = app.closeGlobals;
-            document.getElementById('add-global-btn').onclick = app.addGlobalVar;
-            document.getElementById('save-globals-btn').onclick = app.saveGlobals;
-            document.querySelector('#globals-modal .modal-backdrop').onclick = app.closeGlobals;
+            const globalsBtn = document.getElementById('globals-btn');
+            const globalsClose = document.querySelector('#globals-close');
+            const cancelGlobalsBtn = document.getElementById('cancel-globals-btn');
+            const addGlobalBtn = document.getElementById('add-global-btn');
+            const saveGlobalsBtn = document.getElementById('save-globals-btn');
+            console.log('[SetupEvents] Globals buttons:', {globalsBtn, globalsClose, cancelGlobalsBtn, addGlobalBtn, saveGlobalsBtn});
+            
+            if (globalsBtn) globalsBtn.onclick = app.openGlobals;
+            if (globalsClose) globalsClose.onclick = app.closeGlobals;
+            if (cancelGlobalsBtn) cancelGlobalsBtn.onclick = app.closeGlobals;
+            if (addGlobalBtn) addGlobalBtn.onclick = app.addGlobalVar;
+            if (saveGlobalsBtn) {
+                console.log('[SetupEvents] Binding save-globals-btn to:', app.saveGlobals);
+                saveGlobalsBtn.onclick = app.saveGlobals;
+            }
+            const globalsBackdrop = document.querySelector('#globals-modal .modal-backdrop');
+            if (globalsBackdrop) globalsBackdrop.onclick = app.closeGlobals;
 
             // Extensions Modal
-            document.getElementById('extensions-btn').onclick = app.openExtensions;
-            document.querySelector('#extensions-close').onclick = app.closeExtensions;
-            document.getElementById('cancel-extensions-btn').onclick = app.closeExtensions;
-            document.getElementById('save-extensions-btn').onclick = app.saveExtensions;
-            document.querySelector('#extensions-modal .modal-backdrop').onclick = app.closeExtensions;
+            const extensionsBtn = document.getElementById('extensions-btn');
+            const extensionsClose = document.querySelector('#extensions-close');
+            const cancelExtensionsBtn = document.getElementById('cancel-extensions-btn');
+            const saveExtensionsBtn = document.getElementById('save-extensions-btn');
+            console.log('[SetupEvents] Extensions buttons:', {extensionsBtn, extensionsClose, cancelExtensionsBtn, saveExtensionsBtn});
+            
+            if (extensionsBtn) extensionsBtn.onclick = app.openExtensions;
+            if (extensionsClose) extensionsClose.onclick = app.closeExtensions;
+            if (cancelExtensionsBtn) cancelExtensionsBtn.onclick = app.closeExtensions;
+            if (saveExtensionsBtn) {
+                console.log('[SetupEvents] Binding save-extensions-btn to:', app.saveExtensions);
+                saveExtensionsBtn.onclick = app.saveExtensions;
+            }
+            const extensionsBackdrop = document.querySelector('#extensions-modal .modal-backdrop');
+            if (extensionsBackdrop) extensionsBackdrop.onclick = app.closeExtensions;
 
             // Mode Selection
             const modeSelect = document.getElementById('mode-select');
