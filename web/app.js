@@ -359,7 +359,10 @@ const Backend = {
     },
 
     async createKVBucket(name, config = {}) {
-        if (this.isDesktop()) return await window.go.main.App.CreateKVBucket(name, config);
+        if (this.isDesktop()) {
+            const maxHistory = config.max_history_per_key || 1;
+            return await window.go.main.App.CreateKVBucket(name, maxHistory);
+        }
         const res = await fetch(API_BASE + '/api/kv/buckets', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -381,14 +384,23 @@ const Backend = {
     },
 
     async listKVKeys(bucket) {
-        if (this.isDesktop()) return await window.go.main.App.ListKVKeys(bucket);
+        console.log('[Backend.listKVKeys] bucket:', bucket, 'isDesktop:', this.isDesktop());
+        if (this.isDesktop()) {
+            const keys = await window.go.main.App.KVKeys(bucket);
+            console.log('[Backend.listKVKeys] Desktop keys result:', keys);
+            return keys;
+        }
         const res = await fetch(API_BASE + `/api/kv/buckets/${encodeURIComponent(bucket)}/keys`);
         const data = await res.json();
+        console.log('[Backend.listKVKeys] Server keys result:', data);
         return data.keys || [];
     },
 
     async getKV(bucket, key) {
-        if (this.isDesktop()) return await window.go.main.App.GetKV(bucket, key);
+        if (this.isDesktop()) {
+            const entry = await window.go.main.App.KVGet(bucket, key);
+            return { entry }; // Wrap in object to match server response format
+        }
         const res = await fetch(API_BASE + `/api/kv/buckets/${encodeURIComponent(bucket)}/keys/${encodeURIComponent(key)}`);
         const data = await res.json();
         if (data.error) throw new Error(data.error);
@@ -396,7 +408,7 @@ const Backend = {
     },
 
     async putKV(bucket, key, value) {
-        if (this.isDesktop()) return await window.go.main.App.PutKV(bucket, key, value);
+        if (this.isDesktop()) return await window.go.main.App.KVPut(bucket, key, value);
         const res = await fetch(API_BASE + `/api/kv/buckets/${encodeURIComponent(bucket)}/keys/${encodeURIComponent(key)}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -408,7 +420,7 @@ const Backend = {
     },
 
     async deleteKV(bucket, key) {
-        if (this.isDesktop()) return await window.go.main.App.DeleteKV(bucket, key);
+        if (this.isDesktop()) return await window.go.main.App.KVDelete(bucket, key);
         const res = await fetch(API_BASE + `/api/kv/buckets/${encodeURIComponent(bucket)}/keys/${encodeURIComponent(key)}`, {
             method: 'DELETE'
         });
@@ -2927,8 +2939,9 @@ const kvManager = {
     keys: [],
 
     async init() {
-        await this.loadBuckets();
         this.setupEventListeners();
+        // Don't load buckets on init to avoid errors before NATS connection
+        // Buckets will be loaded when KV modal is opened
     },
 
     setupEventListeners() {
@@ -2978,19 +2991,31 @@ const kvManager = {
         try {
             const profile = app.state.activeNatsProfile;
             if (!profile) {
-                throw new Error('No profile selected');
+                console.warn('No NATS profile selected, skipping KV buckets load');
+                this.buckets = [];
+                this.renderBuckets();
+                return;
             }
-            const response = await fetch(`/api/kv/buckets?profile=${encodeURIComponent(profile)}`);
-            if (!response.ok) {
-                const text = await response.text();
-                throw new Error(`Server error: ${response.status} - ${text}`);
+            
+            // Use appropriate method based on mode
+            if (Backend.isDesktop()) {
+                const buckets = await window.go.main.App.ListKVBuckets();
+                this.buckets = buckets || [];
+            } else {
+                const response = await fetch(`/api/kv/buckets?profile=${encodeURIComponent(profile)}`);
+                if (!response.ok) {
+                    const text = await response.text();
+                    throw new Error(`Server error: ${response.status} - ${text}`);
+                }
+                const data = await response.json();
+                this.buckets = data.buckets || [];
             }
-            const data = await response.json();
-            this.buckets = data.buckets || [];
             this.renderBuckets();
         } catch (error) {
             console.error('Failed to load buckets:', error);
-            alert('Failed to load buckets: ' + error.message);
+            this.buckets = [];
+            this.renderBuckets();
+            app.showToast(`Failed to load KV buckets: ${error.message}`, 'error');
         }
     },
 
@@ -3034,17 +3059,16 @@ const kvManager = {
 
     async loadKeys(bucket) {
         try {
-            const profile = app.state.activeNatsProfile;
-            if (!profile) {
-                throw new Error('No profile selected');
-            }
-            const response = await fetch(`/api/kv/buckets/${bucket}/keys?profile=${encodeURIComponent(profile)}`);
-            const data = await response.json();
-            this.keys = data.keys || [];
+            console.log('[loadKeys] Loading keys for bucket:', bucket);
+            const keys = await Backend.listKVKeys(bucket);
+            console.log('[loadKeys] Keys received:', keys);
+            this.keys = keys || [];
             this.renderKeys();
         } catch (error) {
             console.error('Failed to load keys:', error);
-            alert('Failed to load keys: ' + error.message);
+            this.keys = [];
+            this.renderKeys();
+            app.showToast(`Failed to load keys: ${error.message || error}`, 'error');
         }
     },
 
@@ -3087,9 +3111,7 @@ const kvManager = {
 
     async viewKey(key) {
         try {
-            const profile = app.state.activeNatsProfile;
-            const response = await fetch(`/api/kv/buckets/${this.currentBucket}/keys/${key}?profile=${encodeURIComponent(profile)}`);
-            const data = await response.json();
+            const data = await Backend.getKV(this.currentBucket, key);
             
             const keyBody = document.getElementById(`kv-key-${key}`);
             if (keyBody.classList.contains('expanded')) {
@@ -3106,15 +3128,13 @@ const kvManager = {
             keyBody.classList.add('expanded');
         } catch (error) {
             console.error('Failed to get key:', error);
-            alert('Failed to get key: ' + error.message);
+            app.showToast(`Failed to get key: ${error.message}`, 'error');
         }
     },
 
     async editKey(key) {
         try {
-            const profile = app.state.activeNatsProfile;
-            const response = await fetch(`/api/kv/buckets/${this.currentBucket}/keys/${key}?profile=${encodeURIComponent(profile)}`);
-            const data = await response.json();
+            const data = await Backend.getKV(this.currentBucket, key);
             
             const newValue = prompt(`Edit value for key "${key}":`, data.entry.value);
             if (newValue !== null) {
@@ -3122,7 +3142,7 @@ const kvManager = {
             }
         } catch (error) {
             console.error('Failed to edit key:', error);
-            alert('Failed to edit key: ' + error.message);
+            app.showToast(`Failed to edit key: ${error.message}`, 'error');
         }
     },
 
@@ -3130,35 +3150,22 @@ const kvManager = {
         if (!confirm(`Delete key "${key}"?`)) return;
 
         try {
-            const profile = app.state.activeNatsProfile;
-            const response = await fetch(`/api/kv/buckets/${this.currentBucket}/keys/${key}?profile=${encodeURIComponent(profile)}`, {
-                method: 'DELETE'
-            });
-            
-            if (!response.ok) throw new Error('Delete failed');
-            
+            await Backend.deleteKV(this.currentBucket, key);
             await this.loadKeys(this.currentBucket);
         } catch (error) {
             console.error('Failed to delete key:', error);
-            alert('Failed to delete key: ' + error.message);
+            app.showToast(`Failed to delete key: ${error.message}`, 'error');
         }
     },
 
     async putKey(key, value) {
         try {
-            const profile = app.state.activeNatsProfile;
-            const response = await fetch(`/api/kv/buckets/${this.currentBucket}/keys/${key}?profile=${encodeURIComponent(profile)}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ value })
-            });
-            
-            if (!response.ok) throw new Error('Put failed');
-            
+            await Backend.putKV(this.currentBucket, key, value);
             await this.loadKeys(this.currentBucket);
+            app.showToast('Key saved successfully');
         } catch (error) {
             console.error('Failed to put key:', error);
-            alert('Failed to put key: ' + error.message);
+            app.showToast(`Failed to save key: ${error.message}`, 'error');
         }
     },
 
@@ -3174,24 +3181,13 @@ const kvManager = {
 
     async createBucket(bucketName, maxHistoryPerKey) {
         try {
-            const profile = app.state.activeNatsProfile;
-            const response = await fetch('/api/kv/buckets', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    profile: profile,
-                    bucket_name: bucketName, 
-                    max_history_per_key: maxHistoryPerKey 
-                })
-            });
-            
-            if (!response.ok) throw new Error('Create failed');
-            
+            await Backend.createKVBucket(bucketName, { max_history_per_key: maxHistoryPerKey });
             await this.loadBuckets();
             this.selectBucket(bucketName);
+            app.showToast('Bucket created successfully');
         } catch (error) {
             console.error('Failed to create bucket:', error);
-            alert('Failed to create bucket: ' + error.message);
+            app.showToast(`Failed to create bucket: ${error.message}`, 'error');
         }
     },
 
@@ -3199,12 +3195,7 @@ const kvManager = {
         if (!confirm(`Delete bucket "${this.currentBucket}"?`)) return;
 
         try {
-            const profile = app.state.activeNatsProfile;
-            const response = await fetch(`/api/kv/buckets/${this.currentBucket}?profile=${encodeURIComponent(profile)}`, {
-                method: 'DELETE'
-            });
-            
-            if (!response.ok) throw new Error('Delete failed');
+            await Backend.deleteKVBucket(this.currentBucket);
             
             this.currentBucket = null;
             document.getElementById('kv-empty-state').style.display = 'flex';
@@ -3214,9 +3205,10 @@ const kvManager = {
             document.getElementById('delete-bucket-btn').style.display = 'none';
             
             await this.loadBuckets();
+            app.showToast('Bucket deleted successfully');
         } catch (error) {
             console.error('Failed to delete bucket:', error);
-            alert('Failed to delete bucket: ' + error.message);
+            app.showToast(`Failed to delete bucket: ${error.message}`, 'error');
         }
     },
 
