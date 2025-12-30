@@ -299,7 +299,10 @@ func (s *Store) LoadProfiles() error {
 func (s *Store) SaveProfiles() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.saveProfilesLocked()
+}
 
+func (s *Store) saveProfilesLocked() error {
 	bytes, err := json.MarshalIndent(s.profiles, "", "  ")
 	if err != nil {
 		return err
@@ -547,7 +550,7 @@ func (s *Store) SetActiveJSExtensions(extensions []string) error {
 	defer s.mu.Unlock()
 	
 	s.profiles.JSExtensions = extensions
-	return s.SaveProfiles()
+	return s.saveProfilesLocked()
 }
 
 func (s *Store) AddJSExtension(filename string) error {
@@ -565,7 +568,7 @@ func (s *Store) AddJSExtension(filename string) error {
 	}
 	
 	s.profiles.JSExtensions = append(s.profiles.JSExtensions, filename)
-	return s.SaveProfiles()
+	return s.saveProfilesLocked()
 }
 
 func (s *Store) RemoveJSExtension(filename string) error {
@@ -584,5 +587,5 @@ func (s *Store) RemoveJSExtension(filename string) error {
 	}
 	
 	s.profiles.JSExtensions = filtered
-	return s.SaveProfiles()
+	return s.saveProfilesLocked()
 }
