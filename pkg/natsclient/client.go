@@ -267,7 +267,7 @@ func (c *Client) GetStreamMessages(streamName string, limit int, startSeq uint64
 	
 	// Fetch messages
 	messages := make([]jetstream.Msg, 0, limit)
-	msgBatch, err := consumer.Fetch(limit, jetstream.FetchMaxWait(5*time.Second))
+	msgBatch, err := consumer.Fetch(limit, jetstream.FetchMaxWait(500*time.Millisecond))
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch messages: %w", err)
 	}

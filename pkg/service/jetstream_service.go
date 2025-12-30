@@ -567,7 +567,7 @@ func (s *JetStreamService) FetchAllMessages(streamName string, cfg natsclient.Co
 	fetchCtx, fetchCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer fetchCancel()
 
-	msgBatch, err := consumer.Fetch(int(info.State.Msgs), jetstream.FetchMaxWait(5*time.Second))
+	msgBatch, err := consumer.Fetch(int(info.State.Msgs), jetstream.FetchMaxWait(1*time.Second))
 	if err != nil {
 		// Try to clean up consumer
 		stream.DeleteConsumer(ctx, consumerName)

@@ -16,9 +16,6 @@ func StartApp(cfg *AppConfig, r *gin.Engine, assets fs.FS, app *App) {
 	// Desktop Mode
 	log.Println("Starting Desktop Mode...")
 
-	// Desktop Mode
-	log.Println("Starting Desktop Mode...")
-
 	// Remove background server for pure RPC desktop app
 
 	err := wails.Run(&options.App{
