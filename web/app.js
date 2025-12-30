@@ -298,6 +298,20 @@ const Backend = {
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         return data;
+    },
+
+    async getStreamMessages(streamName, limit = 10) {
+        if (this.isDesktop()) {
+            return await window.go.main.App.GetStreamMessages({
+                stream_name: streamName,
+                limit: limit,
+                config: {}
+            });
+        }
+        const res = await fetch(API_BASE + `/api/jetstream/streams/${encodeURIComponent(streamName)}/messages?limit=${limit}`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        return data;
     }
 };
 
@@ -330,7 +344,8 @@ const app = {
         messageRefreshInterval: null,
         // JetStream
         jsStreams: [],
-        jsSelectedStream: null
+        jsSelectedStream: null,
+        currentStreamName: null
     },
 
     showToast: (message, type = 'info') => {
@@ -1612,6 +1627,57 @@ const app = {
         document.getElementById('jetstream-modal').classList.remove('active');
     },
 
+    openStreamMessages: async (streamName) => {
+        app.state.currentStreamName = streamName;
+        document.getElementById('stream-messages-title').textContent = streamName;
+        document.getElementById('stream-messages-modal').classList.add('active');
+        await app.loadStreamMessages();
+    },
+
+    closeStreamMessages: () => {
+        document.getElementById('stream-messages-modal').classList.remove('active');
+        app.state.currentStreamName = null;
+    },
+
+    loadStreamMessages: async () => {
+        if (!app.state.currentStreamName) return;
+
+        try {
+            const limit = parseInt(document.getElementById('messages-limit').value) || 10;
+            const result = await Backend.getStreamMessages(app.state.currentStreamName, limit);
+            
+            document.getElementById('stream-total-messages').textContent = result.total || 0;
+            app.renderStreamMessages(result.messages || []);
+        } catch (e) {
+            console.error('Failed to load messages:', e);
+            app.showToast(`Failed to load messages: ${e.message}`, 'error');
+        }
+    },
+
+    renderStreamMessages: (messages) => {
+        const listEl = document.getElementById('stream-messages-list');
+        if (!listEl) return;
+
+        if (messages.length === 0) {
+            listEl.innerHTML = '<p class="empty-state">No messages in stream</p>';
+            return;
+        }
+
+        listEl.innerHTML = messages.map(msg => `
+            <div class="message-item">
+                <div class="message-header">
+                    <span class="message-seq">#${msg.sequence}</span>
+                    <span class="message-subject">${msg.subject}</span>
+                    <span class="message-time">${new Date(msg.time).toLocaleString()}</span>
+                    <span class="message-size">${msg.size} bytes</span>
+                </div>
+                <div class="message-data">
+                    <pre>${msg.data}</pre>
+                </div>
+            </div>
+        `).join('');
+    },
+
     switchJSTab: (tabName) => {
         document.querySelectorAll('.js-tab').forEach(tab => {
             tab.classList.remove('active');
@@ -1653,14 +1719,29 @@ const app = {
         listEl.innerHTML = app.state.jsStreams.map(stream => `
             <div class="stream-item">
                 <div class="stream-name">${stream}</div>
-                <button class="btn-icon-sm delete-stream-btn" data-stream="${stream}" title="Delete">
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="3" y1="3" x2="9" y2="9" />
-                        <line x1="9" y1="3" x2="3" y2="9" />
-                    </svg>
-                </button>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn-icon-sm view-messages-btn" data-stream="${stream}" title="View Messages">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M1 6c1.5-3 4.5-3 5-3s3.5 0 5 3c-1.5 3-4.5 3-5 3s-3.5 0-5-3z"/>
+                            <circle cx="6" cy="6" r="2"/>
+                        </svg>
+                    </button>
+                    <button class="btn-icon-sm delete-stream-btn" data-stream="${stream}" title="Delete">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="3" y1="3" x2="9" y2="9" />
+                            <line x1="9" y1="3" x2="3" y2="9" />
+                        </svg>
+                    </button>
+                </div>
             </div>
         `).join('');
+
+        listEl.querySelectorAll('.view-messages-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                app.openStreamMessages(btn.dataset.stream);
+            });
+        });
 
         listEl.querySelectorAll('.delete-stream-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
@@ -2145,6 +2226,14 @@ const app = {
 
             const createConsumerBtn = document.getElementById('create-consumer-btn');
             if (createConsumerBtn) createConsumerBtn.onclick = app.createJSConsumer;
+
+            // Stream Messages Modal
+            document.getElementById('stream-messages-close').onclick = app.closeStreamMessages;
+            document.getElementById('close-stream-messages-btn').onclick = app.closeStreamMessages;
+            document.querySelector('#stream-messages-modal .modal-backdrop').onclick = app.closeStreamMessages;
+            
+            const refreshMessagesBtn = document.getElementById('refresh-stream-messages-btn');
+            if (refreshMessagesBtn) refreshMessagesBtn.onclick = app.loadStreamMessages;
 
             console.log('[SetupEvents] Finished setupEventListeners');
         } catch (e) {

@@ -63,6 +63,25 @@ type JSPublishResponse struct {
 	Status   string `json:"status"`
 }
 
+type StreamMessage struct {
+	Sequence  uint64 `json:"sequence"`
+	Subject   string `json:"subject"`
+	Data      string `json:"data"`
+	Time      string `json:"time"`
+	Size      int    `json:"size"`
+}
+
+type GetMessagesRequest struct {
+	StreamName string            `json:"stream_name"`
+	Limit      int               `json:"limit"`
+	Config     natsclient.Config `json:"config"`
+}
+
+type GetMessagesResponse struct {
+	Messages []StreamMessage `json:"messages"`
+	Total    uint64          `json:"total"`
+}
+
 func NewJetStreamService(store *store.Store, executor *executor.Executor) *JetStreamService {
 	return &JetStreamService{
 		store:    store,
@@ -370,4 +389,68 @@ func (s *JetStreamService) DeleteConsumer(streamName, consumerName string, cfg n
 	}
 
 	return nil
+}
+
+// GetStreamMessages retrieves messages from a stream
+func (s *JetStreamService) GetStreamMessages(req GetMessagesRequest) (*GetMessagesResponse, error) {
+	// Get config from store if not provided
+	cfg := req.Config
+	if cfg.URL == "" {
+		cfg.URL, _ = s.store.GetNatsConfig()
+		if cfg.URL == "" {
+			cfg.URL = "nats://localhost:4222"
+		}
+	}
+	if cfg.CredsPath == "" {
+		_, cfg.CredsPath = s.store.GetNatsConfig()
+	}
+
+	client, err := natsclient.Connect(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect: %w", err)
+	}
+	defer client.Close()
+
+	// Get stream info to get total message count
+	stream, err := client.GetStream(req.StreamName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get stream: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	info, err := stream.Info(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get stream info: %w", err)
+	}
+
+	// Get messages
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 10
+	}
+
+	msgs, err := client.GetStreamMessages(req.StreamName, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get messages: %w", err)
+	}
+
+	// Convert to response format
+	messages := make([]StreamMessage, 0, len(msgs))
+	for _, msg := range msgs {
+		meta, _ := msg.Metadata()
+		messages = append(messages, StreamMessage{
+			Sequence: meta.Sequence.Stream,
+			Subject:  msg.Subject(),
+			Data:     string(msg.Data()),
+			Time:     meta.Timestamp.Format(time.RFC3339),
+			Size:     len(msg.Data()),
+		})
+	}
+
+	return &GetMessagesResponse{
+		Messages: messages,
+		Total:    info.State.Msgs,
+	}, nil
 }

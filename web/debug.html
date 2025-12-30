@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>NATS Manager - Debug</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #ccc;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #2d2d30;
+            border-radius: 4px;
+        }
+        button {
+            padding: 8px 16px;
+            margin: 5px;
+            background: #007acc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0e639c;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            background: #1e1e1e;
+            border: 1px solid #3e3e42;
+            color: #ccc;
+            border-radius: 4px;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #1e1e1e;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+        .error {
+            color: #f48771;
+        }
+        .success {
+            color: #89d185;
+        }
+    </style>
+</head>
+<body>
+    <h1>NATS Manager - Debug Console</h1>
+    
+    <div class="section">
+        <h2>Test Request/Reply</h2>
+        <input type="text" id="req-subject" placeholder="Subject (e.g., test.echo)" value="test.echo">
+        <textarea id="req-body" rows="3" placeholder="Body (JSON)">{"message": "hello"}</textarea>
+        <button onclick="testRequest()">Send Request</button>
+        <div id="req-result" class="result"></div>
+    </div>
+
+    <div class="section">
+        <h2>Test Publish</h2>
+        <input type="text" id="pub-subject" placeholder="Subject (e.g., events.test)" value="events.test">
+        <textarea id="pub-body" rows="3" placeholder="Body (JSON)">{"event": "test", "data": "hello"}</textarea>
+        <button onclick="testPublish()">Publish</button>
+        <div id="pub-result" class="result"></div>
+    </div>
+
+    <div class="section">
+        <h2>Test Subscribe</h2>
+        <input type="text" id="sub-subject" placeholder="Subject (e.g., events.test)" value="events.test">
+        <button onclick="testSubscribe()">Subscribe</button>
+        <button onclick="testGetMessages()">Get Messages</button>
+        <button onclick="testUnsubscribe()">Unsubscribe</button>
+        <div id="sub-result" class="result"></div>
+    </div>
+
+    <script>
+        const API_BASE = '';
+
+        async function testRequest() {
+            const resultEl = document.getElementById('req-result');
+            const subject = document.getElementById('req-subject').value;
+            const body = document.getElementById('req-body').value;
+            
+            resultEl.textContent = 'Sending...';
+            resultEl.className = 'result';
+            
+            try {
+                const res = await fetch(API_BASE + '/api/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        mode: 'request',
+                        subject: subject,
+                        body: body,
+                        variables: {},
+                        config: {}
+                    })
+                });
+                
+                const data = await res.json();
+                console.log('Response:', data);
+                
+                resultEl.textContent = JSON.stringify(data, null, 2);
+                resultEl.className = 'result success';
+            } catch (e) {
+                console.error('Error:', e);
+                resultEl.textContent = 'Error: ' + e.message;
+                resultEl.className = 'result error';
+            }
+        }
+
+        async function testPublish() {
+            const resultEl = document.getElementById('pub-result');
+            const subject = document.getElementById('pub-subject').value;
+            const body = document.getElementById('pub-body').value;
+            
+            resultEl.textContent = 'Publishing...';
+            resultEl.className = 'result';
+            
+            try {
+                const res = await fetch(API_BASE + '/api/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        mode: 'pubsub',
+                        subject: subject,
+                        body: body,
+                        variables: {},
+                        config: {}
+                    })
+                });
+                
+                const data = await res.json();
+                console.log('Response:', data);
+                
+                resultEl.textContent = JSON.stringify(data, null, 2);
+                resultEl.className = 'result success';
+            } catch (e) {
+                console.error('Error:', e);
+                resultEl.textContent = 'Error: ' + e.message;
+                resultEl.className = 'result error';
+            }
+        }
+
+        async function testSubscribe() {
+            const resultEl = document.getElementById('sub-result');
+            const subject = document.getElementById('sub-subject').value;
+            
+            resultEl.textContent = 'Subscribing...';
+            resultEl.className = 'result';
+            
+            try {
+                const res = await fetch(API_BASE + '/api/subscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        subject: subject,
+                        config: {}
+                    })
+                });
+                
+                const data = await res.json();
+                console.log('Response:', data);
+                
+                resultEl.textContent = JSON.stringify(data, null, 2);
+                resultEl.className = 'result success';
+            } catch (e) {
+                console.error('Error:', e);
+                resultEl.textContent = 'Error: ' + e.message;
+                resultEl.className = 'result error';
+            }
+        }
+
+        async function testGetMessages() {
+            const resultEl = document.getElementById('sub-result');
+            const subject = document.getElementById('sub-subject').value;
+            
+            resultEl.textContent = 'Getting messages...';
+            resultEl.className = 'result';
+            
+            try {
+                const res = await fetch(API_BASE + '/api/subscriptions/' + encodeURIComponent(subject) + '/messages');
+                const data = await res.json();
+                console.log('Response:', data);
+                
+                resultEl.textContent = JSON.stringify(data, null, 2);
+                resultEl.className = 'result success';
+            } catch (e) {
+                console.error('Error:', e);
+                resultEl.textContent = 'Error: ' + e.message;
+                resultEl.className = 'result error';
+            }
+        }
+
+        async function testUnsubscribe() {
+            const resultEl = document.getElementById('sub-result');
+            const subject = document.getElementById('sub-subject').value;
+            
+            resultEl.textContent = 'Unsubscribing...';
+            resultEl.className = 'result';
+            
+            try {
+                const res = await fetch(API_BASE + '/api/unsubscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        subject: subject
+                    })
+                });
+                
+                const data = await res.json();
+                console.log('Response:', data);
+                
+                resultEl.textContent = JSON.stringify(data, null, 2);
+                resultEl.className = 'result success';
+            } catch (e) {
+                console.error('Error:', e);
+                resultEl.textContent = 'Error: ' + e.message;
+                resultEl.className = 'result error';
+            }
+        }
+    </script>
+</body>
+</html>

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"natsman/pkg/natsclient"
 	"natsman/pkg/service"
@@ -472,6 +473,27 @@ func SetupRouter(exeDir string, appCfg *AppConfig, configPath string, dataStore 
 				return
 			}
 			c.JSON(http.StatusOK, gin.H{"status": "deleted"})
+		})
+
+		// Get stream messages
+		api.GET("/jetstream/streams/:name/messages", func(c *gin.Context) {
+			streamName := c.Param("name")
+			limitStr := c.DefaultQuery("limit", "10")
+			limit, _ := strconv.Atoi(limitStr)
+
+			req := service.GetMessagesRequest{
+				StreamName: streamName,
+				Limit:      limit,
+				Config:     natsclient.Config{},
+			}
+
+			result, err := jsService.GetStreamMessages(req)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, result)
 		})
 	}
 

@@ -218,3 +218,53 @@ func (c *Client) DeleteConsumer(streamName, consumerName string) error {
 	return stream.DeleteConsumer(ctx, consumerName)
 }
 
+// GetStreamMessages retrieves messages from a stream
+func (c *Client) GetStreamMessages(streamName string, limit int) ([]jetstream.Msg, error) {
+	if c.js == nil {
+		return nil, fmt.Errorf("JetStream not initialized")
+	}
+	
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	
+	stream, err := c.js.Stream(ctx, streamName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get stream: %w", err)
+	}
+	
+	// Create a temporary consumer to fetch messages
+	consumerCfg := jetstream.ConsumerConfig{
+		DeliverPolicy: jetstream.DeliverAllPolicy,
+		AckPolicy:     jetstream.AckNonePolicy,
+	}
+	
+	consumer, err := stream.CreateOrUpdateConsumer(ctx, consumerCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create consumer: %w", err)
+	}
+	
+	// Fetch messages
+	messages := make([]jetstream.Msg, 0, limit)
+	msgBatch, err := consumer.Fetch(limit, jetstream.FetchMaxWait(5*time.Second))
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch messages: %w", err)
+	}
+	
+	for msg := range msgBatch.Messages() {
+		messages = append(messages, msg)
+		if len(messages) >= limit {
+			break
+		}
+	}
+	
+	return messages, nil
+}
+
+

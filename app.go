@@ -180,6 +180,11 @@ func (a *App) JSPublish(req service.JSPublishRequest) (*service.JSPublishRespons
 	return a.jsService.PublishToJetStream(req)
 }
 
+func (a *App) GetStreamMessages(req service.GetMessagesRequest) (*service.GetMessagesResponse, error) {
+	return a.jsService.GetStreamMessages(req)
+}
+
+
 func (a *App) CreateJSConsumer(req service.ConsumerCreateRequest) error {
 	return a.jsService.CreateConsumer(req)
 }
