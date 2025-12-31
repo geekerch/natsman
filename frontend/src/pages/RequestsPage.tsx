@@ -59,25 +59,20 @@ export default function RequestsPage() {
         </Card>
       </div>
       
-      <Card className="flex-1 flex flex-col overflow-hidden">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">
-            {selectedTemplate ? 'Request Editor' : 'Select a template'}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex-1 overflow-y-auto">
-          {!selectedTemplate ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
+      <div className="flex-1 flex flex-col">
+        {!selectedTemplate ? (
+          <Card className="flex-1 flex items-center justify-center">
+            <CardContent className="text-muted-foreground">
               Select a template to edit
-            </div>
-          ) : (
-            <RequestEditor
-              templatePath={selectedTemplate}
-              onSave={handleRefresh}
-            />
-          )}
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        ) : (
+          <RequestEditor
+            templatePath={selectedTemplate}
+            onSave={handleRefresh}
+          />
+        )}
+      </div>
     </div>
   )
 }

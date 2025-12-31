@@ -4,6 +4,7 @@ import { Input } from './ui/input'
 import { Textarea } from './ui/textarea'
 import { Select } from './ui/select'
 import { Button } from './ui/button'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 import { Send, Globe, Code } from 'lucide-react'
 import { GlobalVariablesModal } from './GlobalVariablesModal'
 import { ExtensionsModal } from './ExtensionsModal'
@@ -142,135 +143,122 @@ export function RequestEditor({ templatePath, onSave }: RequestEditorProps) {
   const varCount = Object.keys(localVars).length
 
   return (
-    <div className="h-full flex flex-col gap-4 p-4 overflow-y-auto">
-      {/* Header Actions */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Request Editor</h2>
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setShowGlobals(true)}
-          >
-            <Globe className="mr-2 h-4 w-4" />
-            Globals
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setShowExtensions(true)}
-          >
-            <Code className="mr-2 h-4 w-4" />
-            Extensions
-          </Button>
-        </div>
-      </div>
-
-      {/* Tab Navigation */}
-      <div className="flex border-b">
-        <button
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'request'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-          onClick={() => setActiveTab('request')}
-        >
-          Request
-        </button>
-        <button
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'variables'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-          onClick={() => setActiveTab('variables')}
-        >
-          Variables
-          {varCount > 0 && (
-            <span className="ml-2 px-1.5 py-0.5 text-xs bg-primary/10 text-primary rounded">
-              {varCount}
-            </span>
-          )}
-        </button>
-      </div>
-
-      {/* Tab Content */}
-      <div className="space-y-4 pt-4">
-        {activeTab === 'request' ? (
-          <div className="space-y-4">
-            <div className="grid grid-cols-4 gap-4">
-              <div className="col-span-1">
-                <label className="text-sm font-medium">Mode</label>
-                <Select
-                  value={template.mode}
-                  onChange={(e) => setTemplate({ ...template, mode: e.target.value })}
-                >
-                  <option value="request">Request/Reply</option>
-                  <option value="pubsub">Publish</option>
-                  <option value="jetstream">JetStream</option>
-                </Select>
-              </div>
-              <div className="col-span-3">
-                <label className="text-sm font-medium">Subject</label>
-                <Input
-                  value={template.subject}
-                  onChange={(e) => setTemplate({ ...template, subject: e.target.value })}
-                  placeholder="service.action.{{.id}}"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium">Payload</label>
-              <Textarea
-                value={template.payload}
-                onChange={(e) => setTemplate({ ...template, payload: e.target.value })}
-                placeholder='{"action": "{{.action}}", "data": "{{.data}}"}'
-                rows={12}
-                className="font-mono text-sm"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Use {"{{.variableName}}"} syntax to define variables
-              </p>
-            </div>
+    <Card className="flex-1 overflow-hidden flex flex-col">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg">Request Editor</CardTitle>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowGlobals(true)}
+            >
+              <Globe className="mr-2 h-4 w-4" />
+              Globals
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowExtensions(true)}
+            >
+              <Code className="mr-2 h-4 w-4" />
+              Extensions
+            </Button>
           </div>
-        ) : (
-          <VariablesTab 
-            variables={localVars} 
-            onUpdate={updateLocalVar}
-          />
-        )}
-
-        <div className="flex gap-2 pt-2 border-t">
-          <Button onClick={handleSave}>Save</Button>
-          <Button onClick={handleSend} disabled={sending || !template.subject}>
-            <Send className="mr-2 h-4 w-4" />
-            {sending ? 'Sending...' : 'Send Request'}
-          </Button>
         </div>
-      </div>
+      </CardHeader>
+      <CardContent className="flex-1 overflow-y-auto p-0">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'request' | 'variables')} className="h-full flex flex-col">
+          <TabsList className="w-full rounded-none border-b">
+            <TabsTrigger value="request" className="flex-1">Request</TabsTrigger>
+            <TabsTrigger value="variables" className="flex-1">
+              Variables
+              {varCount > 0 && (
+                <span className="ml-2 px-1.5 py-0.5 text-xs bg-primary/10 text-primary rounded">
+                  {varCount}
+                </span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+          <div className="flex-1 overflow-y-auto p-4">
+            <TabsContent value="request" className="m-0 space-y-4">
+              <div className="grid grid-cols-4 gap-4">
+                <div className="col-span-1">
+                  <label className="text-sm font-medium">Mode</label>
+                  <Select
+                    value={template.mode}
+                    onChange={(e) => setTemplate({ ...template, mode: e.target.value })}
+                  >
+                    <option value="request">Request/Reply</option>
+                    <option value="pubsub">Publish</option>
+                    <option value="jetstream">JetStream</option>
+                  </Select>
+                </div>
+                <div className="col-span-3">
+                  <label className="text-sm font-medium">Subject</label>
+                  <Input
+                    value={template.subject}
+                    onChange={(e) => setTemplate({ ...template, subject: e.target.value })}
+                    placeholder="service.action.{{.id}}"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Payload</label>
+                <Textarea
+                  value={template.payload}
+                  onChange={(e) => setTemplate({ ...template, payload: e.target.value })}
+                  placeholder='{"action": "{{.action}}", "data": "{{.data}}"}'
+                  rows={12}
+                  className="font-mono text-sm"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Use {"{{.variableName}}"} syntax to define variables
+                </p>
+              </div>
+
+              <div className="flex gap-2 pt-2 border-t">
+                <Button onClick={handleSave}>Save</Button>
+                <Button onClick={handleSend} disabled={sending || !template.subject}>
+                  <Send className="mr-2 h-4 w-4" />
+                  {sending ? 'Sending...' : 'Send Request'}
+                </Button>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="variables" className="m-0">
+              <VariablesTab 
+                variables={localVars} 
+                onUpdate={updateLocalVar}
+              />
+            </TabsContent>
+          </div>
+        </Tabs>
+      </CardContent>
 
       {/* Response Card */}
       {response && (
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">Response</CardTitle>
-              <div className="flex items-center gap-4 text-sm">
-                <span className={`font-medium ${response.status === 'error' ? 'text-red-500' : 'text-green-500'}`}>
-                  {response.status}
-                </span>
-                <span className="text-muted-foreground">{response.elapsed}</span>
+        <div className="p-4 pt-0">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">Response</CardTitle>
+                <div className="flex items-center gap-4 text-sm">
+                  <span className={`font-medium ${response.status === 'error' ? 'text-red-500' : 'text-green-500'}`}>
+                    {response.status}
+                  </span>
+                  <span className="text-muted-foreground">{response.elapsed}</span>
+                </div>
               </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <pre className="bg-muted p-4 rounded-md text-sm overflow-x-auto">
-              {response.reply || 'No response data'}
-            </pre>
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent>
+              <pre className="bg-muted p-4 rounded-md text-sm overflow-x-auto">
+                {response.reply || 'No response data'}
+              </pre>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {/* Modals */}
@@ -282,7 +270,7 @@ export function RequestEditor({ templatePath, onSave }: RequestEditorProps) {
         isOpen={showExtensions} 
         onClose={() => setShowExtensions(false)} 
       />
-    </div>
+    </Card>
   )
 }
 
