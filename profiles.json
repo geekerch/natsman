@@ -28,7 +28,7 @@
       "creds_path": ""
     }
   ],
-  "active_nats_profile": "11",
+  "active_nats_profile": "Default",
   "js_extensions": [
     "example.js"
   ]

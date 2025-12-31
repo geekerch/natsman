@@ -2,7 +2,6 @@ import { Link, useLocation } from 'react-router-dom'
 import { 
   FileText, 
   Radio, 
-  Inbox,
   Database, 
   FolderKanban, 
   Settings,
@@ -15,8 +14,7 @@ import { useState } from 'react'
 
 const navigation = [
   { name: 'Requests', href: '/', icon: FileText },
-  { name: 'Pub/Sub', href: '/pubsub', icon: Radio },
-  { name: 'Subscriptions', href: '/subscriptions', icon: Inbox },
+  { name: 'Subscriptions', href: '/subscriptions', icon: Radio },
   { name: 'JetStream', href: '/jetstream', icon: Database },
   { name: 'KV Store', href: '/kv', icon: FolderKanban },
   { name: 'Settings', href: '/settings', icon: Settings },
