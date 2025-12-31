@@ -61,16 +61,20 @@ export default function RequestsPage() {
         </div>
       </SecondarySidebar>
       
-      <div className="flex-1 flex items-center justify-center p-4">
+      <div className="flex-1 overflow-hidden">
         {!selectedTemplate ? (
-          <div className="text-muted-foreground">
-            Select a template to edit
+          <div className="flex items-center justify-center h-full">
+            <div className="text-muted-foreground">
+              Select a template to edit
+            </div>
           </div>
         ) : (
-          <RequestEditor
-            templatePath={selectedTemplate}
-            onSave={handleRefresh}
-          />
+          <div className="h-full p-4 overflow-y-auto">
+            <RequestEditor
+              templatePath={selectedTemplate}
+              onSave={handleRefresh}
+            />
+          </div>
         )}
       </div>
     </div>

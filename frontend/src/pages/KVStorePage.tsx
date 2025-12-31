@@ -4,6 +4,7 @@ import { Input } from '../components/ui/input'
 import { Textarea } from '../components/ui/textarea'
 import { Button } from '../components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog'
+import { SecondarySidebar } from '../components/SecondarySidebar'
 import { api } from '../services/api'
 import type { KVEntry } from '../types'
 
@@ -13,6 +14,7 @@ export default function KVStorePage() {
   const [keys, setKeys] = useState<string[]>([])
   const [selectedKey, setSelectedKey] = useState<string>('')
   const [keyEntry, setKeyEntry] = useState<KVEntry | null>(null)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   
   const [showCreateBucket, setShowCreateBucket] = useState(false)
   const [newBucketName, setNewBucketName] = useState('')
@@ -121,141 +123,144 @@ export default function KVStorePage() {
 
   return (
     <>
-      <div className="flex h-full gap-4 p-4">
-        <div className="w-64">
-          <Card className="h-full flex flex-col">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">Buckets</CardTitle>
+      <div className="flex h-full">
+        <SecondarySidebar
+          isOpen={isSidebarOpen}
+          onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+        >
+          <div className="flex flex-col h-full">
+            {/* Buckets Section */}
+            <div className="flex flex-col border-b">
+              <div className="p-4 border-b flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Buckets</h2>
                 <Button size="sm" onClick={() => setShowCreateBucket(true)}>
                   Create
                 </Button>
               </div>
-            </CardHeader>
-            <CardContent className="flex-1 overflow-y-auto">
-              {buckets.length === 0 ? (
-                <div className="text-sm text-muted-foreground text-center py-8">
-                  No buckets found
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  {buckets.map((bucket) => (
-                    <div
-                      key={bucket}
-                      className={`p-2 rounded cursor-pointer hover:bg-accent ${
-                        selectedBucket === bucket ? 'bg-accent' : ''
-                      }`}
-                      onClick={() => {
-                        setSelectedBucket(bucket)
-                        setSelectedKey('')
-                        setKeyEntry(null)
-                      }}
-                    >
-                      <span className="text-sm font-mono">{bucket}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+              <div className="max-h-48 overflow-y-auto px-2 py-2">
+                {buckets.length === 0 ? (
+                  <div className="text-sm text-muted-foreground text-center py-4">
+                    No buckets found
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {buckets.map((bucket) => (
+                      <div
+                        key={bucket}
+                        className={`p-2 rounded cursor-pointer hover:bg-accent ${
+                          selectedBucket === bucket ? 'bg-accent' : ''
+                        }`}
+                        onClick={() => {
+                          setSelectedBucket(bucket)
+                          setSelectedKey('')
+                          setKeyEntry(null)
+                        }}
+                      >
+                        <span className="text-sm font-mono">{bucket}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
 
-        <div className="w-64">
-          <Card className="h-full flex flex-col">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">Keys</CardTitle>
+            {/* Keys Section */}
+            <div className="flex flex-col flex-1 overflow-hidden">
+              <div className="p-4 border-b flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Keys</h2>
                 {selectedBucket && (
                   <Button size="sm" onClick={() => setShowPutKey(true)}>
                     Put
                   </Button>
                 )}
               </div>
-            </CardHeader>
-            <CardContent className="flex-1 overflow-y-auto">
-              {!selectedBucket ? (
-                <div className="text-sm text-muted-foreground text-center py-8">
-                  Select a bucket
+              <div className="flex-1 overflow-y-auto px-2">
+                {!selectedBucket ? (
+                  <div className="text-sm text-muted-foreground text-center py-8">
+                    Select a bucket
+                  </div>
+                ) : keys.length === 0 ? (
+                  <div className="text-sm text-muted-foreground text-center py-8">
+                    No keys found
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {keys.map((key) => (
+                      <div
+                        key={key}
+                        className={`p-2 rounded cursor-pointer hover:bg-accent ${
+                          selectedKey === key ? 'bg-accent' : ''
+                        }`}
+                        onClick={() => setSelectedKey(key)}
+                      >
+                        <span className="text-sm font-mono truncate block">{key}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </SecondarySidebar>
+
+        <div className="flex-1 overflow-hidden p-4">
+          <Card className="h-full flex flex-col">
+            <CardHeader className="pb-3 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">
+                  {selectedKey ? `Key: ${selectedKey}` : 'Select a key'}
+                </CardTitle>
+                <div className="flex gap-2">
+                  {selectedBucket && (
+                    <Button size="sm" variant="outline" onClick={handleDeleteBucket}>
+                      Delete Bucket
+                    </Button>
+                  )}
+                  {selectedKey && (
+                    <Button size="sm" variant="destructive" onClick={handleDeleteKey}>
+                      Delete Key
+                    </Button>
+                  )}
                 </div>
-              ) : keys.length === 0 ? (
-                <div className="text-sm text-muted-foreground text-center py-8">
-                  No keys found
+              </div>
+            </CardHeader>
+            <CardContent className="flex-1 overflow-y-auto min-h-0">
+              {!selectedKey ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  Select a key to view value
+                </div>
+              ) : keyEntry ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground">Revision</div>
+                      <div className="text-lg">{keyEntry.revision}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground">Operation</div>
+                      <div className="text-lg">{keyEntry.operation}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground">Created</div>
+                      <div className="text-sm">{keyEntry.created}</div>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <div className="text-sm font-medium text-muted-foreground mb-2">Value</div>
+                    <pre className="bg-muted p-4 rounded text-sm overflow-x-auto">
+                      {keyEntry.value}
+                    </pre>
+                  </div>
                 </div>
               ) : (
-                <div className="space-y-1">
-                  {keys.map((key) => (
-                    <div
-                      key={key}
-                      className={`p-2 rounded cursor-pointer hover:bg-accent ${
-                        selectedKey === key ? 'bg-accent' : ''
-                      }`}
-                      onClick={() => setSelectedKey(key)}
-                    >
-                      <span className="text-sm font-mono truncate">{key}</span>
-                    </div>
-                  ))}
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  Loading...
                 </div>
               )}
             </CardContent>
           </Card>
         </div>
-
-        <Card className="flex-1">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">
-                {selectedKey ? `Key: ${selectedKey}` : 'Select a key'}
-              </CardTitle>
-              <div className="flex gap-2">
-                {selectedBucket && (
-                  <Button size="sm" variant="outline" onClick={handleDeleteBucket}>
-                    Delete Bucket
-                  </Button>
-                )}
-                {selectedKey && (
-                  <Button size="sm" variant="destructive" onClick={handleDeleteKey}>
-                    Delete Key
-                  </Button>
-                )}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {!selectedKey ? (
-              <div className="flex items-center justify-center h-96 text-muted-foreground">
-                Select a key to view value
-              </div>
-            ) : keyEntry ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground">Revision</div>
-                    <div className="text-lg">{keyEntry.revision}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground">Operation</div>
-                    <div className="text-lg">{keyEntry.operation}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground">Created</div>
-                    <div className="text-sm">{keyEntry.created}</div>
-                  </div>
-                </div>
-                
-                <div>
-                  <div className="text-sm font-medium text-muted-foreground mb-2">Value</div>
-                  <pre className="bg-muted p-4 rounded text-sm overflow-x-auto">
-                    {keyEntry.value}
-                  </pre>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center justify-center h-96 text-muted-foreground">
-                Loading...
-              </div>
-            )}
-          </CardContent>
-        </Card>
       </div>
 
       {/* Create Bucket Dialog */}

@@ -4,6 +4,7 @@ import { Input } from '../components/ui/input'
 import { Button } from '../components/ui/button'
 import { Select } from '../components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog'
+import { SecondarySidebar } from '../components/SecondarySidebar'
 import { api } from '../services/api'
 import type { StreamInfo } from '../types'
 
@@ -13,6 +14,7 @@ export default function JetStreamPage() {
   const [streamInfo, setStreamInfo] = useState<StreamInfo | null>(null)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   
   const [newStream, setNewStream] = useState({
     name: '',
@@ -85,18 +87,19 @@ export default function JetStreamPage() {
 
   return (
     <>
-      <div className="flex h-full gap-4 p-4">
-        <div className="w-80">
-          <Card className="h-full flex flex-col">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">Streams</CardTitle>
-                <Button size="sm" onClick={() => setShowCreateDialog(true)}>
-                  Create
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="flex-1 overflow-y-auto">
+      <div className="flex h-full">
+        <SecondarySidebar
+          isOpen={isSidebarOpen}
+          onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+        >
+          <div className="flex flex-col h-full">
+            <div className="p-4 border-b flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Streams</h2>
+              <Button size="sm" onClick={() => setShowCreateDialog(true)}>
+                Create
+              </Button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-2">
               {streams.length === 0 ? (
                 <div className="text-sm text-muted-foreground text-center py-8">
                   No streams found
@@ -116,79 +119,81 @@ export default function JetStreamPage() {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        </SecondarySidebar>
+
+        <div className="flex-1 overflow-hidden p-4">
+          <Card className="h-full flex flex-col">
+            <CardHeader className="pb-3 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">
+                  {selectedStream ? `Stream: ${selectedStream}` : 'Select a stream'}
+                </CardTitle>
+                {selectedStream && (
+                  <Button 
+                    size="sm" 
+                    variant="destructive"
+                    onClick={() => setShowDeleteDialog(true)}
+                  >
+                    Delete
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="flex-1 overflow-y-auto min-h-0">
+              {!selectedStream ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  Select a stream to view details
+                </div>
+              ) : streamInfo ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground">Storage</div>
+                      <div className="text-lg">{streamInfo.config.storage}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground">Replicas</div>
+                      <div className="text-lg">{streamInfo.config.replicas}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground">Messages</div>
+                      <div className="text-lg">{streamInfo.state.messages}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground">Consumers</div>
+                      <div className="text-lg">{streamInfo.state.consumer_count}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground">Bytes</div>
+                      <div className="text-lg">{streamInfo.state.bytes}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground">First Seq</div>
+                      <div className="text-lg">{streamInfo.state.first_seq}</div>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <div className="text-sm font-medium text-muted-foreground mb-2">Subjects</div>
+                    <div className="flex flex-wrap gap-2">
+                      {streamInfo.config.subjects?.map((subject, idx) => (
+                        <span key={idx} className="px-2 py-1 bg-muted rounded text-sm font-mono">
+                          {subject}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  Loading...
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
-
-        <Card className="flex-1">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">
-                {selectedStream ? `Stream: ${selectedStream}` : 'Select a stream'}
-              </CardTitle>
-              {selectedStream && (
-                <Button 
-                  size="sm" 
-                  variant="destructive"
-                  onClick={() => setShowDeleteDialog(true)}
-                >
-                  Delete
-                </Button>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {!selectedStream ? (
-              <div className="flex items-center justify-center h-64 text-muted-foreground">
-                Select a stream to view details
-              </div>
-            ) : streamInfo ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground">Storage</div>
-                    <div className="text-lg">{streamInfo.config.storage}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground">Replicas</div>
-                    <div className="text-lg">{streamInfo.config.replicas}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground">Messages</div>
-                    <div className="text-lg">{streamInfo.state.messages}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground">Consumers</div>
-                    <div className="text-lg">{streamInfo.state.consumer_count}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground">Bytes</div>
-                    <div className="text-lg">{streamInfo.state.bytes}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground">First Seq</div>
-                    <div className="text-lg">{streamInfo.state.first_seq}</div>
-                  </div>
-                </div>
-                
-                <div>
-                  <div className="text-sm font-medium text-muted-foreground mb-2">Subjects</div>
-                  <div className="flex flex-wrap gap-2">
-                    {streamInfo.config.subjects?.map((subject, idx) => (
-                      <span key={idx} className="px-2 py-1 bg-muted rounded text-sm font-mono">
-                        {subject}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center justify-center h-64 text-muted-foreground">
-                Loading...
-              </div>
-            )}
-          </CardContent>
-        </Card>
       </div>
 
       {/* Create Stream Dialog */}

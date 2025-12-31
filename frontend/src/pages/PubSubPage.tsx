@@ -155,9 +155,9 @@ export default function PubSubPage() {
         </div>
       </SecondarySidebar>
 
-      <div className="flex-1 p-4">
+      <div className="flex-1 overflow-hidden p-4">
         <Card className="h-full flex flex-col">
-          <CardHeader className="pb-3">
+          <CardHeader className="pb-3 flex-shrink-0">
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">
                 {selectedSub ? `Messages: ${selectedSub}` : 'Select a subscription'}
@@ -169,7 +169,7 @@ export default function PubSubPage() {
               )}
             </div>
           </CardHeader>
-          <CardContent className="flex-1 overflow-y-auto">
+          <CardContent className="flex-1 overflow-y-auto min-h-0">
             {!selectedSub ? (
               <div className="flex items-center justify-center h-full text-muted-foreground">
                 Select a subscription to view messages

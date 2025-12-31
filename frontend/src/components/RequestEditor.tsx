@@ -181,7 +181,7 @@ export function RequestEditor({ templatePath, onSave }: RequestEditorProps) {
             </TabsTrigger>
           </TabsList>
           
-          <TabsContent value="request" className="p-4 m-0 space-y-4">
+          <TabsContent value="request" className="flex-1 p-4 space-y-4 overflow-y-auto">
               <div className="grid grid-cols-4 gap-4">
                 <div className="col-span-1">
                   <label className="text-sm font-medium">Mode</label>
@@ -227,7 +227,7 @@ export function RequestEditor({ templatePath, onSave }: RequestEditorProps) {
               </div>
             </TabsContent>
 
-          <TabsContent value="variables" className="p-4 m-0">
+          <TabsContent value="variables" className="flex-1 p-4 overflow-y-auto">
             <VariablesTab 
               variables={localVars} 
               onUpdate={updateLocalVar}
