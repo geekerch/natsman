@@ -387,6 +387,65 @@ class ApiService {
     const data = await res.json()
     return data.active || ''
   }
+
+  async saveGlobalsProfile(profile: GlobalsProfile): Promise<void> {
+    if (isDesktop()) {
+      return await window.go!.main!.App.SaveGlobalsProfile(profile)
+    }
+    const res = await fetch(`${API_BASE}/profiles/globals`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(profile),
+    })
+    if (!res.ok) throw new Error('Failed to save globals profile')
+  }
+
+  // Parse Variables
+  async parseVariables(content: string): Promise<string[]> {
+    if (isDesktop()) {
+      return await window.go!.main!.App.ExtractVariables(content)
+    }
+    const res = await fetch(`${API_BASE}/parse`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    })
+    if (!res.ok) throw new Error('Failed to parse variables')
+    return res.json()
+  }
+
+  // Extensions
+  async listExtensions(): Promise<string[]> {
+    if (isDesktop()) {
+      return await window.go!.main!.App.ListExtensions()
+    }
+    const res = await fetch(`${API_BASE}/extensions`)
+    if (!res.ok) throw new Error('Failed to list extensions')
+    const data = await res.json()
+    return data.extensions || []
+  }
+
+  async getEnabledExtensions(): Promise<string[]> {
+    if (isDesktop()) {
+      return await window.go!.main!.App.GetEnabledExtensions()
+    }
+    const res = await fetch(`${API_BASE}/extensions/enabled`)
+    if (!res.ok) throw new Error('Failed to get enabled extensions')
+    const data = await res.json()
+    return data.extensions || []
+  }
+
+  async saveEnabledExtensions(extensions: string[]): Promise<void> {
+    if (isDesktop()) {
+      return await window.go!.main!.App.SaveEnabledExtensions(extensions)
+    }
+    const res = await fetch(`${API_BASE}/extensions/enabled`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ extensions }),
+    })
+    if (!res.ok) throw new Error('Failed to save enabled extensions')
+  }
 }
 
 export const api = new ApiService()
