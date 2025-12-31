@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input'
 import { Button } from '../components/ui/button'
+import { SecondarySidebar } from '../components/SecondarySidebar'
 import { api } from '../services/api'
 import type { NatsProfile } from '../types'
 
@@ -10,6 +11,7 @@ export default function SettingsPage() {
   const [activeProfile, setActiveProfile] = useState<string>('')
   const [selectedProfile, setSelectedProfile] = useState<NatsProfile | null>(null)
   const [isEditing, setIsEditing] = useState(false)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   
   const [formData, setFormData] = useState({
     name: '',
@@ -137,18 +139,20 @@ export default function SettingsPage() {
   const showForm = selectedProfile !== null || isEditing
 
   return (
-    <div className="flex h-full gap-4 p-4">
-      <div className="w-80">
-        <Card className="h-full flex flex-col">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">NATS Profiles</CardTitle>
-              <Button size="sm" onClick={handleNewProfile}>
-                New
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="flex-1 overflow-y-auto">
+    <div className="flex h-full">
+      <SecondarySidebar
+        isOpen={isSidebarOpen}
+        onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+      >
+        <div className="flex flex-col h-full">
+          <div className="p-4 border-b flex items-center justify-between">
+            <h2 className="text-lg font-semibold">NATS Profiles</h2>
+            <Button size="sm" onClick={handleNewProfile}>
+              New
+            </Button>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto px-2">
             {profiles.length === 0 ? (
               <div className="text-sm text-muted-foreground text-center py-8">
                 No profiles found
@@ -178,85 +182,87 @@ export default function SettingsPage() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      </SecondarySidebar>
+
+      <div className="flex-1 p-4">
+        <Card className="h-full">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">
+              {isEditing && !selectedProfile 
+                ? 'New Profile' 
+                : selectedProfile 
+                ? `Profile: ${selectedProfile.name}` 
+                : 'Profile Details'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!showForm ? (
+              <div className="flex items-center justify-center h-96 text-muted-foreground">
+                Select a profile or create a new one
+              </div>
+            ) : (
+              <div className="space-y-4 max-w-2xl">
+                <div>
+                  <label className="text-sm font-medium">Profile Name</label>
+                  <Input
+                    placeholder="default"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    disabled={!isEditing}
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-sm font-medium">NATS URL</label>
+                  <Input
+                    placeholder="nats://localhost:4222"
+                    value={formData.url}
+                    onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+                    disabled={!isEditing}
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-sm font-medium">Credentials Path (Optional)</label>
+                  <Input
+                    placeholder="/path/to/nats.creds"
+                    value={formData.creds_path}
+                    onChange={(e) => setFormData({ ...formData, creds_path: e.target.value })}
+                    disabled={!isEditing}
+                  />
+                </div>
+                
+                <div className="flex gap-2 pt-4">
+                  {isEditing ? (
+                    <>
+                      <Button onClick={handleSave}>Save</Button>
+                      <Button variant="outline" onClick={handleCancel}>
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button onClick={() => setIsEditing(true)}>Edit</Button>
+                      {selectedProfile && activeProfile !== selectedProfile.name && (
+                        <Button variant="outline" onClick={handleActivate}>
+                          Set Active
+                        </Button>
+                      )}
+                      {selectedProfile && (
+                        <Button variant="destructive" onClick={handleDelete}>
+                          Delete
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
-
-      <Card className="flex-1">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">
-            {isEditing && !selectedProfile 
-              ? 'New Profile' 
-              : selectedProfile 
-              ? `Profile: ${selectedProfile.name}` 
-              : 'Profile Details'}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {!showForm ? (
-            <div className="flex items-center justify-center h-96 text-muted-foreground">
-              Select a profile or create a new one
-            </div>
-          ) : (
-            <div className="space-y-4 max-w-2xl">
-              <div>
-                <label className="text-sm font-medium">Profile Name</label>
-                <Input
-                  placeholder="default"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  disabled={!isEditing}
-                />
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium">NATS URL</label>
-                <Input
-                  placeholder="nats://localhost:4222"
-                  value={formData.url}
-                  onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-                  disabled={!isEditing}
-                />
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium">Credentials Path (Optional)</label>
-                <Input
-                  placeholder="/path/to/nats.creds"
-                  value={formData.creds_path}
-                  onChange={(e) => setFormData({ ...formData, creds_path: e.target.value })}
-                  disabled={!isEditing}
-                />
-              </div>
-              
-              <div className="flex gap-2 pt-4">
-                {isEditing ? (
-                  <>
-                    <Button onClick={handleSave}>Save</Button>
-                    <Button variant="outline" onClick={handleCancel}>
-                      Cancel
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button onClick={() => setIsEditing(true)}>Edit</Button>
-                    {selectedProfile && activeProfile !== selectedProfile.name && (
-                      <Button variant="outline" onClick={handleActivate}>
-                        Set Active
-                      </Button>
-                    )}
-                    {selectedProfile && (
-                      <Button variant="destructive" onClick={handleDelete}>
-                        Delete
-                      </Button>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   )
 }

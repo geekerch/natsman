@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input'
 import { Button } from '../components/ui/button'
 import { Trash2 } from 'lucide-react'
+import { SecondarySidebar } from '../components/SecondarySidebar'
 import { api } from '../services/api'
 import type { SubscriptionMessage } from '../types'
 
@@ -12,6 +13,7 @@ export default function PubSubPage() {
   const [messages, setMessages] = useState<SubscriptionMessage[]>([])
   const [newSubject, setNewSubject] = useState('')
   const [loading, setLoading] = useState(false)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
 
   useEffect(() => {
     loadSubscriptions()
@@ -88,40 +90,43 @@ export default function PubSubPage() {
   }
 
   return (
-    <div className="flex h-full gap-4 p-4">
-      <div className="w-80 flex flex-col gap-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">New Subscription</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <Input
-              placeholder="Subject pattern (e.g., events.*)"
-              value={newSubject}
-              onChange={(e) => setNewSubject(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSubscribe()}
-            />
-            <Button 
-              className="w-full" 
-              onClick={handleSubscribe}
-              disabled={loading || !newSubject}
-            >
-              {loading ? 'Subscribing...' : 'Subscribe'}
-            </Button>
-          </CardContent>
-        </Card>
+    <div className="flex h-full">
+      <SecondarySidebar
+        isOpen={isSidebarOpen}
+        onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+      >
+        <div className="flex flex-col h-full">
+          <div className="p-4 border-b">
+            <h2 className="text-lg font-semibold mb-3">New Subscription</h2>
+            <div className="space-y-2">
+              <Input
+                placeholder="Subject pattern (e.g., events.*)"
+                value={newSubject}
+                onChange={(e) => setNewSubject(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSubscribe()}
+              />
+              <Button 
+                className="w-full" 
+                onClick={handleSubscribe}
+                disabled={loading || !newSubject}
+                size="sm"
+              >
+                {loading ? 'Subscribing...' : 'Subscribe'}
+              </Button>
+            </div>
+          </div>
 
-        <Card className="flex-1 overflow-hidden flex flex-col">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Active Subscriptions</CardTitle>
-          </CardHeader>
-          <CardContent className="flex-1 overflow-y-auto p-0">
+          <div className="p-4 border-b">
+            <h3 className="text-sm font-semibold mb-2">Active Subscriptions</h3>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-2">
             {subscriptions.length === 0 ? (
               <div className="text-sm text-muted-foreground text-center py-8">
                 No active subscriptions
               </div>
             ) : (
-              <div className="space-y-1 p-4">
+              <div className="space-y-1">
                 {subscriptions.map((sub) => (
                   <div
                     key={sub}
@@ -146,53 +151,55 @@ export default function PubSubPage() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      </SecondarySidebar>
+
+      <div className="flex-1 p-4">
+        <Card className="h-full flex flex-col">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">
+                {selectedSub ? `Messages: ${selectedSub}` : 'Select a subscription'}
+              </CardTitle>
+              {selectedSub && (
+                <Button size="sm" variant="outline" onClick={handleClearMessages}>
+                  Clear
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="flex-1 overflow-y-auto">
+            {!selectedSub ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                Select a subscription to view messages
+              </div>
+            ) : messages.length === 0 ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                No messages received yet
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {messages.map((msg, idx) => (
+                  <div key={idx} className="border rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-mono text-muted-foreground">
+                        {msg.subject}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {msg.timestamp}
+                      </span>
+                    </div>
+                    <pre className="text-sm bg-muted p-2 rounded overflow-x-auto">
+                      {msg.data}
+                    </pre>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
-
-      <Card className="flex-1 flex flex-col">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">
-              {selectedSub ? `Messages: ${selectedSub}` : 'Select a subscription'}
-            </CardTitle>
-            {selectedSub && (
-              <Button size="sm" variant="outline" onClick={handleClearMessages}>
-                Clear
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="flex-1 overflow-y-auto">
-          {!selectedSub ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              Select a subscription to view messages
-            </div>
-          ) : messages.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              No messages received yet
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {messages.map((msg, idx) => (
-                <div key={idx} className="border rounded-lg p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-mono text-muted-foreground">
-                      {msg.subject}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {msg.timestamp}
-                    </span>
-                  </div>
-                  <pre className="text-sm bg-muted p-2 rounded overflow-x-auto">
-                    {msg.data}
-                  </pre>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   )
 }
