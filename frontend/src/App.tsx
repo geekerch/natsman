@@ -1,15 +1,24 @@
-import './index.css'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { MainLayout } from './components/layout/MainLayout'
+import RequestsPage from './pages/RequestsPage'
+import PubSubPage from './pages/PubSubPage'
+import JetStreamPage from './pages/JetStreamPage'
+import KVStorePage from './pages/KVStorePage'
+import SettingsPage from './pages/SettingsPage'
 
 function App() {
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto p-8">
-        <h1 className="text-4xl font-bold mb-4">NATS Manager</h1>
-        <p className="text-muted-foreground">
-          React + TypeScript + shadcn/ui - New UI in progress
-        </p>
-      </div>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route element={<MainLayout />}>
+          <Route path="/" element={<RequestsPage />} />
+          <Route path="/pubsub" element={<PubSubPage />} />
+          <Route path="/jetstream" element={<JetStreamPage />} />
+          <Route path="/kv" element={<KVStorePage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   )
 }
 
