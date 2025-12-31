@@ -143,116 +143,113 @@ export function RequestEditor({ templatePath, onSave }: RequestEditorProps) {
 
   return (
     <div className="h-full flex flex-col gap-4 p-4 overflow-y-auto">
-      {/* Configuration Card */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">Configuration</CardTitle>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setShowGlobals(true)}
-              >
-                <Globe className="mr-2 h-4 w-4" />
-                Globals
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setShowExtensions(true)}
-              >
-                <Code className="mr-2 h-4 w-4" />
-                Extensions
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Tab Navigation */}
-          <div className="flex border-b">
-            <button
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === 'request'
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-              onClick={() => setActiveTab('request')}
-            >
-              Request
-            </button>
-            <button
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === 'variables'
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-              onClick={() => setActiveTab('variables')}
-            >
-              Variables
-              {varCount > 0 && (
-                <span className="ml-2 px-1.5 py-0.5 text-xs bg-primary/10 text-primary rounded">
-                  {varCount}
-                </span>
-              )}
-            </button>
-          </div>
+      {/* Header Actions */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Request Editor</h2>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setShowGlobals(true)}
+          >
+            <Globe className="mr-2 h-4 w-4" />
+            Globals
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setShowExtensions(true)}
+          >
+            <Code className="mr-2 h-4 w-4" />
+            Extensions
+          </Button>
+        </div>
+      </div>
 
-          {/* Tab Content */}
-          {activeTab === 'request' ? (
-            <div className="space-y-4">
-              <div className="grid grid-cols-4 gap-4">
-                <div className="col-span-1">
-                  <label className="text-sm font-medium">Mode</label>
-                  <Select
-                    value={template.mode}
-                    onChange={(e) => setTemplate({ ...template, mode: e.target.value })}
-                  >
-                    <option value="request">Request/Reply</option>
-                    <option value="pubsub">Publish</option>
-                    <option value="jetstream">JetStream</option>
-                  </Select>
-                </div>
-                <div className="col-span-3">
-                  <label className="text-sm font-medium">Subject</label>
-                  <Input
-                    value={template.subject}
-                    onChange={(e) => setTemplate({ ...template, subject: e.target.value })}
-                    placeholder="service.action.{{.id}}"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Payload</label>
-                <Textarea
-                  value={template.payload}
-                  onChange={(e) => setTemplate({ ...template, payload: e.target.value })}
-                  placeholder='{"action": "{{.action}}", "data": "{{.data}}"}'
-                  rows={12}
-                  className="font-mono text-sm"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Use {"{{.variableName}}"} syntax to define variables
-                </p>
-              </div>
-            </div>
-          ) : (
-            <VariablesTab 
-              variables={localVars} 
-              onUpdate={updateLocalVar}
-            />
+      {/* Tab Navigation */}
+      <div className="flex border-b">
+        <button
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'request'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+          onClick={() => setActiveTab('request')}
+        >
+          Request
+        </button>
+        <button
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'variables'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+          onClick={() => setActiveTab('variables')}
+        >
+          Variables
+          {varCount > 0 && (
+            <span className="ml-2 px-1.5 py-0.5 text-xs bg-primary/10 text-primary rounded">
+              {varCount}
+            </span>
           )}
+        </button>
+      </div>
 
-          <div className="flex gap-2 pt-2 border-t">
-            <Button onClick={handleSave}>Save</Button>
-            <Button onClick={handleSend} disabled={sending || !template.subject}>
-              <Send className="mr-2 h-4 w-4" />
-              {sending ? 'Sending...' : 'Send Request'}
-            </Button>
+      {/* Tab Content */}
+      <div className="space-y-4 pt-4">
+        {activeTab === 'request' ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-4 gap-4">
+              <div className="col-span-1">
+                <label className="text-sm font-medium">Mode</label>
+                <Select
+                  value={template.mode}
+                  onChange={(e) => setTemplate({ ...template, mode: e.target.value })}
+                >
+                  <option value="request">Request/Reply</option>
+                  <option value="pubsub">Publish</option>
+                  <option value="jetstream">JetStream</option>
+                </Select>
+              </div>
+              <div className="col-span-3">
+                <label className="text-sm font-medium">Subject</label>
+                <Input
+                  value={template.subject}
+                  onChange={(e) => setTemplate({ ...template, subject: e.target.value })}
+                  placeholder="service.action.{{.id}}"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">Payload</label>
+              <Textarea
+                value={template.payload}
+                onChange={(e) => setTemplate({ ...template, payload: e.target.value })}
+                placeholder='{"action": "{{.action}}", "data": "{{.data}}"}'
+                rows={12}
+                className="font-mono text-sm"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Use {"{{.variableName}}"} syntax to define variables
+              </p>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        ) : (
+          <VariablesTab 
+            variables={localVars} 
+            onUpdate={updateLocalVar}
+          />
+        )}
+
+        <div className="flex gap-2 pt-2 border-t">
+          <Button onClick={handleSave}>Save</Button>
+          <Button onClick={handleSend} disabled={sending || !template.subject}>
+            <Send className="mr-2 h-4 w-4" />
+            {sending ? 'Sending...' : 'Send Request'}
+          </Button>
+        </div>
+      </div>
 
       {/* Response Card */}
       {response && (
