@@ -27,6 +27,14 @@ export default function SettingsPage() {
       const active = await api.getActiveNatsProfile()
       setProfiles(profileList)
       setActiveProfile(active)
+      
+      // Auto-select active profile if exists
+      if (profileList.length > 0 && active) {
+        const activeProfileData = profileList.find(p => p.name === active)
+        if (activeProfileData) {
+          handleSelectProfile(activeProfileData)
+        }
+      }
     } catch (error) {
       console.error('Failed to load profiles:', error)
     }
@@ -53,27 +61,41 @@ export default function SettingsPage() {
   }
 
   const handleSave = async () => {
-    if (!formData.name || !formData.url) return
+    if (!formData.name || !formData.url) {
+      alert('Please fill in profile name and URL')
+      return
+    }
     
     try {
+      console.log('Saving profile:', formData)
       await api.saveNatsProfile(formData)
-      loadProfiles()
+      await loadProfiles()
       setIsEditing(false)
+      
+      // Select the newly saved profile
+      const newProfile = { ...formData }
+      setSelectedProfile(newProfile)
     } catch (error) {
       console.error('Failed to save profile:', error)
+      alert('Failed to save profile: ' + (error as Error).message)
     }
   }
 
   const handleDelete = async () => {
-    if (!selectedProfile || !confirm(`Delete profile "${selectedProfile.name}"?`)) return
+    if (!selectedProfile) return
+    
+    if (!confirm(`Delete profile "${selectedProfile.name}"?`)) return
     
     try {
+      console.log('Deleting profile:', selectedProfile.name)
       await api.deleteNatsProfile(selectedProfile.name)
       setSelectedProfile(null)
       setFormData({ name: '', url: '', creds_path: '' })
-      loadProfiles()
+      setIsEditing(false)
+      await loadProfiles()
     } catch (error) {
       console.error('Failed to delete profile:', error)
+      alert('Failed to delete profile: ' + (error as Error).message)
     }
   }
 
@@ -81,12 +103,32 @@ export default function SettingsPage() {
     if (!selectedProfile) return
     
     try {
+      console.log('Activating profile:', selectedProfile.name)
       await api.activateNatsProfile(selectedProfile.name)
-      loadProfiles()
+      await loadProfiles()
     } catch (error) {
       console.error('Failed to activate profile:', error)
+      alert('Failed to activate profile: ' + (error as Error).message)
     }
   }
+
+  const handleCancel = () => {
+    setIsEditing(false)
+    if (selectedProfile) {
+      // Restore original data
+      setFormData({
+        name: selectedProfile.name,
+        url: selectedProfile.url,
+        creds_path: selectedProfile.creds_path
+      })
+    } else {
+      // Clear form
+      setFormData({ name: '', url: '', creds_path: '' })
+    }
+  }
+
+  // Determine if we should show the form
+  const showForm = selectedProfile !== null || isEditing
 
   return (
     <div className="flex h-full gap-4 p-4">
@@ -137,11 +179,15 @@ export default function SettingsPage() {
       <Card className="flex-1">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">
-            {selectedProfile ? `Profile: ${selectedProfile.name}` : 'New Profile'}
+            {isEditing && !selectedProfile 
+              ? 'New Profile' 
+              : selectedProfile 
+              ? `Profile: ${selectedProfile.name}` 
+              : 'Profile Details'}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {selectedProfile === null && !isEditing ? (
+          {!showForm ? (
             <div className="flex items-center justify-center h-96 text-muted-foreground">
               Select a profile or create a new one
             </div>
@@ -181,15 +227,7 @@ export default function SettingsPage() {
                 {isEditing ? (
                   <>
                     <Button onClick={handleSave}>Save</Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => {
-                        setIsEditing(false)
-                        if (selectedProfile) {
-                          handleSelectProfile(selectedProfile)
-                        }
-                      }}
-                    >
+                    <Button variant="outline" onClick={handleCancel}>
                       Cancel
                     </Button>
                   </>
