@@ -254,7 +254,7 @@ function TreeNodeComponent({ node, level, selectedPath, onSelect, onDelete }: Tr
           "flex items-center gap-1 py-1 px-2 rounded hover:bg-accent cursor-pointer group",
           isSelected && "bg-accent"
         )}
-        style={{ paddingLeft: `${level * 12 + 8}px` }}
+        style={{ paddingLeft: `${level * 20 + 8}px` }}
         onClick={() => {
           if (node.is_folder) {
             setIsExpanded(!isExpanded)
@@ -263,14 +263,16 @@ function TreeNodeComponent({ node, level, selectedPath, onSelect, onDelete }: Tr
           }
         }}
       >
-        {node.is_folder && (
-          <span className="flex-shrink-0">
+        {node.is_folder ? (
+          <span className="flex-shrink-0 w-4">
             {isExpanded ? (
               <ChevronDown className="h-4 w-4" />
             ) : (
               <ChevronRight className="h-4 w-4" />
             )}
           </span>
+        ) : (
+          <span className="flex-shrink-0 w-4" />
         )}
         <span className="flex-shrink-0">
           {node.is_folder ? (
