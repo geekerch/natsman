@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, watch, h } from 'vue'
-import { NForm, NFormItem, NInput, NSelect, NButton, NSpace, NCard, NTabs, NTabPane, NDataTable, NTag, useMessage } from 'naive-ui'
+import { NForm, NFormItem, NInput, NSelect, NButton, NSpace, NCard, NTabs, NTabPane, NDataTable, NTag, useMessage, NIcon } from 'naive-ui'
 import { Template, RequestPayload, SendReqResult, Variable } from '../types/domain'
 import { ApiService } from '../services/api'
+import { TrashOutline, AddOutline } from '@vicons/ionicons5'
 
 const props = defineProps<{
   path: string
@@ -27,16 +28,34 @@ const formData = ref<Template>({
 // Local Variables
 const variables = ref<{ key: string; value: string; type: string }[]>([])
 
+// Variable type options
+const variableTypeOptions = [
+  { label: 'Static', value: 'static' },
+  { label: 'Environment', value: 'env' },
+  { label: 'Dynamic (JS)', value: 'dynamic' }
+]
+
 // Initialize form when template changes
 watch(() => props.initialTemplate, (newVal) => {
   if (newVal) {
     formData.value = { ...newVal }
     result.value = null
-    // TODO: Load variables if stored in template
+    
+    // Load variables from template if they exist
+    if ((newVal as any).variables) {
+      const vars = (newVal as any).variables
+      variables.value = Object.keys(vars).map(key => ({
+        key,
+        value: vars[key].value,
+        type: vars[key].type || 'static'
+      }))
+    } else {
+      variables.value = []
+    }
   } else {
-    // Reset or New
     formData.value = { mode: 'request', subject: '', payload: '' }
     result.value = null
+    variables.value = []
   }
 }, { immediate: true })
 
@@ -73,7 +92,18 @@ const handleSend = async () => {
 
 const handleSave = async () => {
   try {
-    await ApiService.saveTemplate(props.path, formData.value)
+    // Save variables to template
+    const varsMap: Record<string, Variable> = {}
+    variables.value.forEach(v => {
+      if (v.key) varsMap[v.key] = { type: v.type, value: v.value }
+    })
+    
+    const templateToSave = {
+      ...formData.value,
+      variables: varsMap
+    }
+    
+    await ApiService.saveTemplate(props.path, templateToSave as any)
     message.success('Template saved')
     emit('saved')
   } catch (e: any) {
@@ -83,28 +113,57 @@ const handleSave = async () => {
 
 // Variable Table Config
 const varColumns = [
-  { title: 'Key', key: 'key', render: (row: any, index: number) => {
+  { 
+    title: 'Key', 
+    key: 'key', 
+    width: 150,
+    render: (row: any, index: number) => {
       return h(NInput, { 
         value: row.key, 
         onUpdateValue: (v) => variables.value[index].key = v,
-        placeholder: 'Variable Name'
+        placeholder: 'Variable Name',
+        size: 'small'
       })
     } 
   },
-  { title: 'Value', key: 'value', render: (row: any, index: number) => {
-      return h(NInput, { 
-        value: row.value, 
-        onUpdateValue: (v) => variables.value[index].value = v,
-        placeholder: 'Value'
+  { 
+    title: 'Type', 
+    key: 'type',
+    width: 150,
+    render: (row: any, index: number) => {
+      return h(NSelect, { 
+        value: row.type, 
+        onUpdateValue: (v) => variables.value[index].type = v,
+        options: variableTypeOptions,
+        size: 'small'
       })
     }
   },
-  { title: 'Action', key: 'action', render: (_row: any, index: number) => {
+  { 
+    title: 'Value', 
+    key: 'value', 
+    render: (row: any, index: number) => {
+      return h(NInput, { 
+        value: row.value, 
+        onUpdateValue: (v) => variables.value[index].value = v,
+        placeholder: row.type === 'dynamic' ? 'JS Expression' : 'Value',
+        size: 'small'
+      })
+    }
+  },
+  { 
+    title: 'Action', 
+    key: 'action',
+    width: 80,
+    render: (_row: any, index: number) => {
       return h(NButton, { 
         size: 'small', 
-        type: 'error', 
+        type: 'error',
+        quaternary: true,
         onClick: () => variables.value.splice(index, 1) 
-      }, { default: () => 'Remove' })
+      }, { 
+        icon: () => h(NIcon, null, { default: () => h(TrashOutline) })
+      })
     }
   }
 ]
@@ -150,9 +209,22 @@ const addVariable = () => {
       
       <n-tab-pane name="variables" tab="Variables">
         <div class="mb-2">
-          <n-button size="small" @click="addVariable">Add Variable</n-button>
+          <n-button size="small" @click="addVariable">
+            <template #icon>
+              <n-icon><AddOutline /></n-icon>
+            </template>
+            Add Variable
+          </n-button>
         </div>
-        <n-data-table :columns="varColumns" :data="variables" size="small" />
+        <n-data-table 
+          :columns="varColumns" 
+          :data="variables" 
+          size="small"
+          :pagination="false"
+        />
+        <div v-if="variables.length === 0" class="text-gray-400 text-center mt-4">
+          No variables. Use variables in your subject or payload with <code>&#123;&#123;.variableName&#125;&#125;</code> syntax.
+        </div>
       </n-tab-pane>
     </n-tabs>
 

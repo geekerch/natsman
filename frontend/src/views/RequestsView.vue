@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { NLayout, NLayoutSider, NLayoutContent, NTree, NEmpty, NButton, NSpace, useMessage, NModal, NInput } from 'naive-ui'
+import { ref, onMounted, h } from 'vue'
+import { NLayout, NLayoutSider, NLayoutContent, NTree, NEmpty, NButton, NSpace, useMessage, NModal, NInput, NIcon, NDropdown } from 'naive-ui'
+import type { DropdownOption, TreeOption } from 'naive-ui'
+import { FolderOutline, DocumentOutline, AddOutline, TrashOutline } from '@vicons/ionicons5'
 import { ApiService } from '../services/api'
 import { TreeNode, Template } from '../types/domain'
 import RequestEditor from '../components/RequestEditor.vue'
@@ -14,7 +16,14 @@ const currentPath = ref<string>('')
 // Modal states
 const showCreateModal = ref(false)
 const newName = ref('')
-const isFolder = ref(false)
+const createType = ref<'file' | 'folder'>('file')
+const parentPath = ref('')
+
+// Context menu
+const showContextMenu = ref(false)
+const contextMenuX = ref(0)
+const contextMenuY = ref(0)
+const contextNode = ref<TreeNode | null>(null)
 
 const loadTree = async () => {
   try {
@@ -44,39 +53,124 @@ const handleUpdateValue = async (keys: string[], option: any[]) => {
   }
 }
 
+const openCreateModal = (path: string = '', type: 'file' | 'folder' = 'file') => {
+  parentPath.value = path
+  createType.value = type
+  newName.value = ''
+  showCreateModal.value = true
+}
+
 const handleCreate = async () => {
   if (!newName.value) return
   
-  // Determine parent path based on selection (if folder) or root
-  // For simplicity, just creating at root or we need a way to select parent.
-  // Let's assume root for now or implement context menu later.
-  const path = newName.value // Relative to root
+  const fullPath = parentPath.value ? `${parentPath.value}/${newName.value}` : newName.value
   
   try {
-    if (isFolder.value) {
-      // Folder creation API not fully exposed in ApiService yet, need to add it
-      // Assuming ApiService.createFolder exists or we use createTemplate for files
-      // Let's stick to files for now
-    } else {
-      const tmpl: Template = { mode: 'request', subject: '', payload: '' }
-      await ApiService.saveTemplate(path, tmpl)
-      message.success('Created ' + path)
+    const wails = (window as any).go?.main?.App
+    if (wails) {
+      if (createType.value === 'folder') {
+        await wails.CreateFolder(fullPath)
+        message.success('Folder created')
+      } else {
+        const tmpl: Template = { mode: 'request', subject: '', payload: '' }
+        await wails.CreateTemplate(fullPath, tmpl)
+        message.success('Template created')
+      }
       await loadTree()
       showCreateModal.value = false
       newName.value = ''
+    } else {
+      // HTTP fallback
+      if (createType.value === 'file') {
+        const tmpl: Template = { mode: 'request', subject: '', payload: '' }
+        await ApiService.saveTemplate(fullPath, tmpl)
+        message.success('Created ' + fullPath)
+        await loadTree()
+        showCreateModal.value = false
+        newName.value = ''
+      }
     }
   } catch (e: any) {
     message.error('Failed to create: ' + e.message)
   }
 }
 
-const openCreateModal = () => {
-  showCreateModal.value = true
+const handleDelete = async (path: string) => {
+  try {
+    const wails = (window as any).go?.main?.App
+    if (wails) {
+      await wails.DeleteTemplate(path)
+      message.success('Deleted')
+      if (currentPath.value === path) {
+        currentPath.value = ''
+        currentTemplate.value = null
+      }
+      await loadTree()
+    }
+  } catch (e: any) {
+    message.error('Failed to delete: ' + e.message)
+  }
+}
+
+const handleNodeRightClick = ({ option, event }: { option: TreeNode, event: MouseEvent }) => {
+  event.preventDefault()
+  contextNode.value = option
+  contextMenuX.value = event.clientX
+  contextMenuY.value = event.clientY
+  showContextMenu.value = true
+}
+
+const contextMenuOptions: DropdownOption[] = [
+  {
+    label: 'New File',
+    key: 'newFile',
+    icon: () => h(NIcon, null, { default: () => h(DocumentOutline) })
+  },
+  {
+    label: 'New Folder',
+    key: 'newFolder',
+    icon: () => h(NIcon, null, { default: () => h(FolderOutline) })
+  },
+  {
+    label: 'Delete',
+    key: 'delete',
+    icon: () => h(NIcon, null, { default: () => h(TrashOutline) })
+  }
+]
+
+const handleContextMenuSelect = (key: string) => {
+  showContextMenu.value = false
+  if (!contextNode.value) return
+  
+  const node = contextNode.value
+  
+  switch (key) {
+    case 'newFile':
+      openCreateModal(node.is_folder ? node.path : '', 'file')
+      break
+    case 'newFolder':
+      openCreateModal(node.is_folder ? node.path : '', 'folder')
+      break
+    case 'delete':
+      handleDelete(node.path)
+      break
+  }
+}
+
+const handleClickOutside = () => {
+  showContextMenu.value = false
+}
+
+const renderPrefix = ({ option }: { option: TreeOption }) => {
+  const treeNode = option as any
+  return h(NIcon, null, {
+    default: () => h(treeNode.is_folder ? FolderOutline : DocumentOutline)
+  })
 }
 </script>
 
 <template>
-  <n-layout has-sider style="height: 100%">
+  <n-layout has-sider style="height: 100%" @click="handleClickOutside">
     <n-layout-sider
       bordered
       width="300"
@@ -84,7 +178,20 @@ const openCreateModal = () => {
     >
       <div class="mb-2 flex justify-between items-center">
         <span class="font-bold">Templates</span>
-        <n-button size="tiny" @click="openCreateModal">New</n-button>
+        <n-space size="small">
+          <n-button size="tiny" @click="openCreateModal('', 'file')">
+            <template #icon>
+              <n-icon><AddOutline /></n-icon>
+            </template>
+            File
+          </n-button>
+          <n-button size="tiny" @click="openCreateModal('', 'folder')">
+            <template #icon>
+              <n-icon><AddOutline /></n-icon>
+            </template>
+            Folder
+          </n-button>
+        </n-space>
       </div>
       <n-tree
         block-line
@@ -94,6 +201,10 @@ const openCreateModal = () => {
         children-field="children"
         :selected-keys="selectedKeys"
         @update:selected-keys="handleUpdateValue"
+        @node-props="(info) => ({
+          onContextmenu: (e: MouseEvent) => handleNodeRightClick({ option: info.option as TreeNode, event: e })
+        })"
+        :render-prefix="renderPrefix"
         selectable
         expand-on-click
         class="flex-1"
@@ -112,12 +223,32 @@ const openCreateModal = () => {
     </n-layout-content>
   </n-layout>
 
-  <n-modal v-model:show="showCreateModal" preset="dialog" title="Create New Template">
+  <!-- Create Modal -->
+  <n-modal v-model:show="showCreateModal" preset="dialog" :title="`Create New ${createType === 'folder' ? 'Folder' : 'Template'}`">
     <n-space vertical>
-      <n-input v-model:value="newName" placeholder="Template Name (e.g. my_request)" />
+      <n-input 
+        v-model:value="newName" 
+        :placeholder="`${createType === 'folder' ? 'Folder' : 'Template'} Name`" 
+        @keyup.enter="handleCreate"
+      />
       <div class="flex justify-end">
-        <n-button type="primary" @click="handleCreate">Create</n-button>
+        <n-space>
+          <n-button @click="showCreateModal = false">Cancel</n-button>
+          <n-button type="primary" @click="handleCreate" :disabled="!newName">Create</n-button>
+        </n-space>
       </div>
     </n-space>
   </n-modal>
+
+  <!-- Context Menu -->
+  <n-dropdown
+    placement="bottom-start"
+    trigger="manual"
+    :x="contextMenuX"
+    :y="contextMenuY"
+    :options="contextMenuOptions"
+    :show="showContextMenu"
+    @select="handleContextMenuSelect"
+    @clickoutside="showContextMenu = false"
+  />
 </template>

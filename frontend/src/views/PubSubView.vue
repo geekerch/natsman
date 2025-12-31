@@ -1,71 +1,103 @@
 <template>
-  <div class="h-full flex flex-col">
-    <div class="p-4 border-b flex justify-between items-center">
-      <h2 class="text-xl font-bold">Pub/Sub</h2>
-      <div class="flex gap-2">
-        <n-input v-model:value="newSubject" placeholder="Subject (e.g. updates.>)" @keyup.enter="subscribe" />
+  <n-layout style="height: 100%">
+    <n-layout-header bordered style="padding: 16px; display: flex; justify-content: space-between; align-items: center;">
+      <h2 style="margin: 0; font-size: 20px; font-weight: bold;">Pub/Sub</h2>
+      <n-space>
+        <n-input 
+          v-model:value="newSubject" 
+          placeholder="Subject (e.g. updates.>)" 
+          @keyup.enter="subscribe"
+          style="width: 300px;"
+        />
         <n-button type="primary" @click="subscribe" :disabled="!newSubject">Subscribe</n-button>
-      </div>
-    </div>
+      </n-space>
+    </n-layout-header>
 
-    <div class="flex-1 flex overflow-hidden">
+    <n-layout has-sider style="flex: 1;">
       <!-- Sidebar: Active Subscriptions -->
-      <div class="w-64 border-r bg-gray-50 flex flex-col">
-        <div class="p-2 font-semibold text-gray-600 border-b">Active Subscriptions</div>
-        <div class="flex-1 overflow-y-auto p-2">
-          <div
-            v-for="sub in subscriptions"
-            :key="sub"
-            class="p-2 rounded cursor-pointer hover:bg-gray-200 flex justify-between items-center group"
-            :class="{ 'bg-blue-100': selectedSubject === sub }"
-            @click="selectSubject(sub)"
-          >
-            <span class="truncate" :title="sub">{{ sub }}</span>
-            <n-button size="tiny" type="error" ghost class="opacity-0 group-hover:opacity-100" @click.stop="unsubscribe(sub)">
-              ✕
-            </n-button>
-          </div>
-          <div v-if="subscriptions.length === 0" class="text-gray-400 text-center mt-4">
-            No subscriptions
-          </div>
+      <n-layout-sider 
+        bordered 
+        width="260"
+        content-style="display: flex; flex-direction: column;"
+      >
+        <div style="padding: 12px; font-weight: 600; border-bottom: 1px solid var(--n-border-color);">
+          Active Subscriptions
         </div>
-      </div>
+        <div style="flex: 1; overflow-y: auto; padding: 8px;">
+          <n-space vertical :size="4">
+            <n-card
+              v-for="sub in subscriptions"
+              :key="sub"
+              size="small"
+              :bordered="selectedSubject === sub"
+              hoverable
+              @click="selectSubject(sub)"
+              style="cursor: pointer;"
+              :class="{ 'selected-subscription': selectedSubject === sub }"
+            >
+              <template #default>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-family: monospace; font-size: 13px;" :title="sub">
+                    {{ sub.length > 25 ? sub.substring(0, 25) + '...' : sub }}
+                  </span>
+                  <n-button 
+                    size="tiny" 
+                    type="error" 
+                    text
+                    @click.stop="unsubscribe(sub)"
+                  >
+                    ✕
+                  </n-button>
+                </div>
+              </template>
+            </n-card>
+          </n-space>
+          <n-empty v-if="subscriptions.length === 0" description="No subscriptions" style="margin-top: 40px;" />
+        </div>
+      </n-layout-sider>
 
       <!-- Main Content: Messages -->
-      <div class="flex-1 flex flex-col bg-white">
-        <div v-if="selectedSubject" class="h-full flex flex-col">
-          <div class="p-2 border-b flex justify-between items-center bg-gray-50">
-            <div class="font-mono font-bold">{{ selectedSubject }}</div>
-            <div class="flex gap-2">
-              <n-button size="small" @click="refreshMessages">Refresh</n-button>
-              <n-button size="small" type="warning" @click="clearMessages">Clear</n-button>
-            </div>
-          </div>
+      <n-layout-content content-style="display: flex; flex-direction: column;">
+        <div v-if="selectedSubject" style="display: flex; flex-direction: column; height: 100%;">
+          <n-page-header style="padding: 12px; border-bottom: 1px solid var(--n-border-color);">
+            <template #title>
+              <span style="font-family: monospace;">{{ selectedSubject }}</span>
+            </template>
+            <template #extra>
+              <n-space>
+                <n-button size="small" @click="refreshMessages">Refresh</n-button>
+                <n-button size="small" type="warning" @click="clearMessages">Clear</n-button>
+              </n-space>
+            </template>
+          </n-page-header>
           
-          <div class="flex-1 overflow-y-auto p-4 space-y-2">
-            <div v-for="(msg, idx) in messages" :key="idx" class="border rounded p-2 hover:shadow-sm">
-              <div class="flex justify-between text-xs text-gray-500 mb-1">
-                <span class="font-mono">{{ msg.subject }}</span>
-                <span>{{ formatTime(msg.timestamp) }}</span>
-              </div>
-              <pre class="bg-gray-50 p-2 rounded text-sm overflow-x-auto">{{ msg.data }}</pre>
-            </div>
-            <div v-if="messages.length === 0" class="text-gray-400 text-center mt-10">
-              No messages received yet.
-            </div>
+          <div style="flex: 1; overflow-y: auto; padding: 16px;">
+            <n-space vertical :size="8">
+              <n-card 
+                v-for="(msg, idx) in messages" 
+                :key="idx"
+                size="small"
+                hoverable
+              >
+                <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--n-text-color-3); margin-bottom: 8px;">
+                  <span style="font-family: monospace;">{{ msg.subject }}</span>
+                  <span>{{ formatTime(msg.timestamp) }}</span>
+                </div>
+                <n-code :code="msg.data" language="json" :word-wrap="true" />
+              </n-card>
+            </n-space>
+            <n-empty v-if="messages.length === 0" description="No messages received yet." style="margin-top: 80px;" />
           </div>
         </div>
-        <div v-else class="flex-1 flex items-center justify-center text-gray-400">
-          Select a subscription to view messages
-        </div>
-      </div>
-    </div>
-  </div>
+        <n-empty v-else description="Select a subscription to view messages" style="height: 100%; display: flex; align-items: center; justify-content: center;" />
+      </n-layout-content>
+    </n-layout>
+  </n-layout>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
-import { useMessage } from 'naive-ui';
+import { NLayout, NLayoutHeader, NLayoutSider, NLayoutContent, NSpace, NInput, NButton, NCard, NEmpty, NPageHeader, NCode, useMessage } from 'naive-ui';
 import { ApiService } from '../services/api';
 import { SubscriptionMessage } from '../types/domain';
 
@@ -155,3 +187,11 @@ onUnmounted(() => {
   if (pollInterval) clearInterval(pollInterval);
 });
 </script>
+
+<style scoped>
+.selected-subscription {
+  border-color: var(--n-color-target);
+  background-color: var(--n-color-target);
+  opacity: 0.9;
+}
+</style>

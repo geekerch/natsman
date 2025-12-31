@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { NLayout, NLayoutSider, NLayoutContent, NDataTable, NButton, NPageHeader, NSpace, NDescriptions, NDescriptionsItem, NTabs, NTabPane, NTag, useMessage } from 'naive-ui'
+import { ref, onMounted, h } from 'vue'
+import { NLayout, NLayoutSider, NLayoutContent, NDataTable, NButton, NPageHeader, NSpace, NDescriptions, NDescriptionsItem, NTabs, NTabPane, NTag, NModal, NForm, NFormItem, NInput, NDynamicTags, NInputNumber, NSelect, NPopconfirm, NIcon, useMessage } from 'naive-ui'
+import { AddOutline, TrashOutline } from '@vicons/ionicons5'
 import { ApiService } from '../services/api'
 import { StreamInfo } from '../types/domain'
 
@@ -11,8 +12,46 @@ const streamInfo = ref<StreamInfo | null>(null)
 const messages = ref<any[]>([])
 const loadingMessages = ref(false)
 
+// Create Stream Modal
+const showCreateModal = ref(false)
+const createForm = ref({
+  name: '',
+  subjects: [] as string[],
+  storage: 'file',
+  replicas: 1
+})
+
+const storageOptions = [
+  { label: 'File', value: 'file' },
+  { label: 'Memory', value: 'memory' }
+]
+
 const columns = [
-  { title: 'Stream Name', key: 'name' }
+  { title: 'Stream Name', key: 'name' },
+  {
+    title: 'Actions',
+    key: 'actions',
+    width: 100,
+    render: (row: any) => {
+      return h(NSpace, null, {
+        default: () => [
+          h(NPopconfirm, {
+            onPositiveClick: () => deleteStream(row.name)
+          }, {
+            default: () => 'Are you sure to delete this stream?',
+            trigger: () => h(NButton, {
+              size: 'small',
+              type: 'error',
+              quaternary: true,
+              onClick: (e: Event) => e.stopPropagation()
+            }, {
+              icon: () => h(NIcon, null, { default: () => h(TrashOutline) })
+            })
+          })
+        ]
+      })
+    }
+  }
 ]
 
 const loadStreams = async () => {
@@ -30,7 +69,7 @@ const selectStream = async (row: any) => {
   selectedStream.value = row.name
   try {
     streamInfo.value = await ApiService.getStreamInfo(row.name)
-    messages.value = [] // Clear messages on switch
+    messages.value = []
   } catch (e: any) {
     message.error('Failed to get stream info: ' + e.message)
   }
@@ -46,6 +85,43 @@ const loadMessages = async () => {
     message.error('Failed to load messages: ' + e.message)
   } finally {
     loadingMessages.value = false
+  }
+}
+
+const createStream = async () => {
+  if (!createForm.value.name || createForm.value.subjects.length === 0) {
+    message.warning('Please fill in stream name and subjects')
+    return
+  }
+  
+  try {
+    await ApiService.createStream({
+      name: createForm.value.name,
+      subjects: createForm.value.subjects,
+      storage: createForm.value.storage,
+      replicas: createForm.value.replicas,
+      config: { url: '', creds_path: '' }
+    })
+    message.success('Stream created')
+    showCreateModal.value = false
+    createForm.value = { name: '', subjects: [], storage: 'file', replicas: 1 }
+    await loadStreams()
+  } catch (e: any) {
+    message.error('Failed to create stream: ' + e.message)
+  }
+}
+
+const deleteStream = async (name: string) => {
+  try {
+    await ApiService.deleteStream(name)
+    message.success('Stream deleted')
+    if (selectedStream.value === name) {
+      selectedStream.value = null
+      streamInfo.value = null
+    }
+    await loadStreams()
+  } catch (e: any) {
+    message.error('Failed to delete stream: ' + e.message)
   }
 }
 
@@ -66,7 +142,15 @@ const msgColumns = [
     <n-layout-sider bordered width="300" content-style="padding: 10px;">
       <div class="mb-2 font-bold flex justify-between items-center">
         <span>Streams</span>
-        <n-button size="tiny" @click="loadStreams">Refresh</n-button>
+        <n-space size="small">
+          <n-button size="tiny" @click="showCreateModal = true">
+            <template #icon>
+              <n-icon><AddOutline /></n-icon>
+            </template>
+            New
+          </n-button>
+          <n-button size="tiny" @click="loadStreams">Refresh</n-button>
+        </n-space>
       </div>
       <n-data-table
         :columns="columns"
@@ -96,6 +180,10 @@ const msgColumns = [
               <n-descriptions-item label="Created">{{ streamInfo.created }}</n-descriptions-item>
               <n-descriptions-item label="Storage">{{ streamInfo.config.storage }}</n-descriptions-item>
               <n-descriptions-item label="Subjects">{{ streamInfo.config.subjects?.join(', ') }}</n-descriptions-item>
+              <n-descriptions-item label="Replicas">{{ streamInfo.config.replicas }}</n-descriptions-item>
+              <n-descriptions-item label="First Seq">{{ streamInfo.state.first_seq }}</n-descriptions-item>
+              <n-descriptions-item label="Last Seq">{{ streamInfo.state.last_seq }}</n-descriptions-item>
+              <n-descriptions-item label="Consumers">{{ streamInfo.state.consumer_count }}</n-descriptions-item>
             </n-descriptions>
           </n-tab-pane>
           <n-tab-pane name="messages" tab="Messages">
@@ -107,8 +195,32 @@ const msgColumns = [
         </n-tabs>
       </div>
       <div v-else class="flex h-full items-center justify-center">
-        <div class="text-gray-400">Select a stream to view details</div>
+        <n-empty description="Select a stream to view details" />
       </div>
     </n-layout-content>
   </n-layout>
+
+  <!-- Create Stream Modal -->
+  <n-modal v-model:show="showCreateModal" preset="dialog" title="Create JetStream">
+    <n-form label-placement="left" label-width="100">
+      <n-form-item label="Name" required>
+        <n-input v-model:value="createForm.name" placeholder="stream_name" />
+      </n-form-item>
+      <n-form-item label="Subjects" required>
+        <n-dynamic-tags v-model:value="createForm.subjects" />
+      </n-form-item>
+      <n-form-item label="Storage">
+        <n-select v-model:value="createForm.storage" :options="storageOptions" />
+      </n-form-item>
+      <n-form-item label="Replicas">
+        <n-input-number v-model:value="createForm.replicas" :min="1" :max="5" />
+      </n-form-item>
+    </n-form>
+    <template #action>
+      <n-space>
+        <n-button @click="showCreateModal = false">Cancel</n-button>
+        <n-button type="primary" @click="createStream">Create</n-button>
+      </n-space>
+    </template>
+  </n-modal>
 </template>

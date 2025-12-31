@@ -2,6 +2,7 @@ export interface Template {
     mode: string;
     subject: string;
     payload: string;
+    variables?: Record<string, Variable>;
 }
 
 export interface TreeNode {

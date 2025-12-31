@@ -119,8 +119,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, h } from 'vue';
-import { useMessage, NButton } from 'naive-ui';
+import { ref, onMounted, h, computed } from 'vue';
+import { NButton, NModal, NInput, NInputNumber, NPopconfirm, NDataTable, NDrawer, NDrawerContent, NTag, NSpin, useMessage } from 'naive-ui';
 import { ApiService } from '../services/api';
 import { KVEntry } from '../types/domain';
 
@@ -165,8 +165,6 @@ const keyColumns = [
 ];
 
 const keysData = computed(() => keys.value.map(k => ({ key: k })));
-
-import { computed } from 'vue';
 
 const loadBuckets = async () => {
   try {
@@ -271,3 +269,11 @@ onMounted(() => {
   loadBuckets();
 });
 </script>
+
+<style scoped>
+.selected-bucket {
+  border-color: var(--n-color-target);
+  background-color: var(--n-color-target);
+  opacity: 0.9;
+}
+</style>
