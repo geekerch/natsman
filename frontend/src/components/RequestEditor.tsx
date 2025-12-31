@@ -167,9 +167,9 @@ export function RequestEditor({ templatePath, onSave }: RequestEditorProps) {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="flex-1 overflow-y-auto p-0">
+      <CardContent className="flex-1 p-0 flex flex-col overflow-hidden">
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'request' | 'variables')} className="h-full flex flex-col">
-          <TabsList className="w-full rounded-none border-b">
+          <TabsList className="w-full rounded-none border-b flex-shrink-0">
             <TabsTrigger value="request" className="flex-1">Request</TabsTrigger>
             <TabsTrigger value="variables" className="flex-1">
               Variables
@@ -180,8 +180,8 @@ export function RequestEditor({ templatePath, onSave }: RequestEditorProps) {
               )}
             </TabsTrigger>
           </TabsList>
-          <div className="flex-1 overflow-y-auto p-4">
-            <TabsContent value="request" className="m-0 space-y-4">
+          
+          <TabsContent value="request" className="p-4 m-0 space-y-4">
               <div className="grid grid-cols-4 gap-4">
                 <div className="col-span-1">
                   <label className="text-sm font-medium">Mode</label>
@@ -227,13 +227,12 @@ export function RequestEditor({ templatePath, onSave }: RequestEditorProps) {
               </div>
             </TabsContent>
 
-            <TabsContent value="variables" className="m-0">
-              <VariablesTab 
-                variables={localVars} 
-                onUpdate={updateLocalVar}
-              />
-            </TabsContent>
-          </div>
+          <TabsContent value="variables" className="p-4 m-0">
+            <VariablesTab 
+              variables={localVars} 
+              onUpdate={updateLocalVar}
+            />
+          </TabsContent>
         </Tabs>
       </CardContent>
 
