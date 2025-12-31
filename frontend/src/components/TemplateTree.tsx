@@ -1,25 +1,49 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ChevronRight, ChevronDown, Folder, FileText, Trash2 } from 'lucide-react'
 import type { TreeNode as TreeNodeType } from '../types'
 import { Button } from './ui/button'
 import { cn } from '../lib/utils'
+import { api } from '../services/api'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog'
+import { Input } from './ui/input'
 
 interface TemplateTreeProps {
   onSelectTemplate: (path: string) => void
-  onCreateFile: (parentPath: string) => void
-  onCreateFolder: (parentPath: string) => void
-  onDeleteItem: (path: string) => void
+  onRefresh?: () => void
 }
 
-export function TemplateTree({
-  onSelectTemplate,
-  onCreateFile,
-  onCreateFolder,
-  onDeleteItem
-}: TemplateTreeProps) {
-  const [tree] = useState<TreeNodeType | null>(null)
+export function TemplateTree({ onSelectTemplate, onRefresh }: TemplateTreeProps) {
+  const [tree, setTree] = useState<TreeNodeType | null>(null)
   const [selectedPath, setSelectedPath] = useState<string>('')
-  const [loading] = useState(false)
+  const [loading, setLoading] = useState(false)
+  
+  // Create file dialog
+  const [showCreateFile, setShowCreateFile] = useState(false)
+  const [newFileName, setNewFileName] = useState('')
+  
+  // Create folder dialog
+  const [showCreateFolder, setShowCreateFolder] = useState(false)
+  const [newFolderName, setNewFolderName] = useState('')
+  
+  // Delete confirmation
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [itemToDelete, setItemToDelete] = useState('')
+
+  useEffect(() => {
+    loadTree()
+  }, [])
+
+  const loadTree = async () => {
+    setLoading(true)
+    try {
+      const data = await api.getTemplates()
+      setTree(data)
+    } catch (error) {
+      console.error('Failed to load templates:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleSelect = (node: TreeNodeType) => {
     if (!node.is_folder) {
@@ -28,48 +52,168 @@ export function TemplateTree({
     }
   }
 
+  const handleCreateFile = async () => {
+    if (!newFileName) return
+    
+    try {
+      await api.createTemplate(newFileName + '.nm', {
+        mode: 'request',
+        subject: '',
+        payload: ''
+      })
+      setShowCreateFile(false)
+      setNewFileName('')
+      loadTree()
+      onRefresh?.()
+    } catch (error) {
+      console.error('Failed to create file:', error)
+    }
+  }
+
+  const handleCreateFolder = async () => {
+    if (!newFolderName) return
+    
+    try {
+      await api.createFolder(newFolderName)
+      setShowCreateFolder(false)
+      setNewFolderName('')
+      loadTree()
+    } catch (error) {
+      console.error('Failed to create folder:', error)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!itemToDelete) return
+    
+    try {
+      await api.deleteTemplate(itemToDelete)
+      setShowDeleteConfirm(false)
+      setItemToDelete('')
+      loadTree()
+      onRefresh?.()
+    } catch (error) {
+      console.error('Failed to delete:', error)
+    }
+  }
+
+  const confirmDelete = (path: string) => {
+    setItemToDelete(path)
+    setShowDeleteConfirm(true)
+  }
+
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex items-center justify-between p-3 border-b">
-        <h3 className="font-semibold text-sm">Templates</h3>
-        <div className="flex gap-1">
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7"
-            onClick={() => onCreateFile('')}
-            title="New File"
-          >
-            <FileText className="h-4 w-4" />
-          </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7"
-            onClick={() => onCreateFolder('')}
-            title="New Folder"
-          >
-            <Folder className="h-4 w-4" />
-          </Button>
+    <>
+      <div className="h-full flex flex-col">
+        <div className="flex items-center justify-between p-3 border-b">
+          <h3 className="font-semibold text-sm">Templates</h3>
+          <div className="flex gap-1">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              onClick={() => setShowCreateFile(true)}
+              title="New File"
+            >
+              <FileText className="h-4 w-4" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              onClick={() => setShowCreateFolder(true)}
+              title="New Folder"
+            >
+              <Folder className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-2">
+          {loading ? (
+            <div className="text-sm text-muted-foreground p-2">Loading...</div>
+          ) : tree && tree.children && tree.children.length > 0 ? (
+            tree.children.map((child: TreeNodeType) => (
+              <TreeNodeComponent
+                key={child.path}
+                node={child}
+                level={0}
+                selectedPath={selectedPath}
+                onSelect={handleSelect}
+                onDelete={confirmDelete}
+              />
+            ))
+          ) : (
+            <div className="text-sm text-muted-foreground p-2">No templates</div>
+          )}
         </div>
       </div>
-      
-      <div className="flex-1 overflow-y-auto p-2">
-        {loading ? (
-          <div className="text-sm text-muted-foreground p-2">Loading...</div>
-        ) : tree ? (
-          <TreeNodeComponent
-            node={tree}
-            level={0}
-            selectedPath={selectedPath}
-            onSelect={handleSelect}
-            onDelete={onDeleteItem}
-          />
-        ) : (
-          <div className="text-sm text-muted-foreground p-2">No templates</div>
-        )}
-      </div>
-    </div>
+
+      {/* Create File Dialog */}
+      <Dialog open={showCreateFile} onOpenChange={setShowCreateFile}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New File</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <Input
+              placeholder="Enter file name"
+              value={newFileName}
+              onChange={(e) => setNewFileName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleCreateFile()}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateFile(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateFile}>Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Folder Dialog */}
+      <Dialog open={showCreateFolder} onOpenChange={setShowCreateFolder}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Folder</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <Input
+              placeholder="Enter folder name"
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleCreateFolder()}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateFolder(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateFolder}>Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Delete</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm">Are you sure you want to delete this item?</p>
+            <p className="text-sm text-muted-foreground mt-2">{itemToDelete}</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 
