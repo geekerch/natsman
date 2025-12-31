@@ -33,6 +33,7 @@ export interface NatsConfig {
 
 export interface SendReqResult {
   reply: string
+  message?: string
   status: string
   elapsed: string
 }

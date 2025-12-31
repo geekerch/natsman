@@ -5,9 +5,10 @@ import { Textarea } from './ui/textarea'
 import { Select } from './ui/select'
 import { Button } from './ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
-import { Send, Globe, Code } from 'lucide-react'
+import { Send, Globe, Code, SplitSquareVertical, SplitSquareHorizontal } from 'lucide-react'
 import { GlobalVariablesModal } from './GlobalVariablesModal'
 import { ExtensionsModal } from './ExtensionsModal'
+import { ResizablePanels } from './ResizablePanels'
 import type { Template, SendReqResult, Variable } from '../types'
 import { api } from '../services/api'
 
@@ -29,6 +30,7 @@ export function RequestEditor({ templatePath, onSave }: RequestEditorProps) {
   const [showGlobals, setShowGlobals] = useState(false)
   const [showExtensions, setShowExtensions] = useState(false)
   const [activeTab, setActiveTab] = useState<'request' | 'variables'>('request')
+  const [layoutMode, setLayoutMode] = useState<'vertical' | 'horizontal'>('vertical')
 
   useEffect(() => {
     if (templatePath) {
@@ -151,6 +153,18 @@ export function RequestEditor({ templatePath, onSave }: RequestEditorProps) {
             <Button
               size="sm"
               variant="outline"
+              onClick={() => setLayoutMode(mode => mode === 'vertical' ? 'horizontal' : 'vertical')}
+              title={layoutMode === 'vertical' ? 'Switch to Horizontal Split' : 'Switch to Vertical Split'}
+            >
+              {layoutMode === 'vertical' ? (
+                <SplitSquareHorizontal className="h-4 w-4" />
+              ) : (
+                <SplitSquareVertical className="h-4 w-4" />
+              )}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
               onClick={() => setShowGlobals(true)}
             >
               <Globe className="mr-2 h-4 w-4" />
@@ -181,51 +195,86 @@ export function RequestEditor({ templatePath, onSave }: RequestEditorProps) {
             </TabsTrigger>
           </TabsList>
           
-          <TabsContent value="request" className="flex-1 p-4 space-y-4 overflow-y-auto">
-              <div className="grid grid-cols-4 gap-4">
-                <div className="col-span-1">
-                  <label className="text-sm font-medium">Mode</label>
-                  <Select
-                    value={template.mode}
-                    onChange={(e) => setTemplate({ ...template, mode: e.target.value })}
-                  >
-                    <option value="request">Request/Reply</option>
-                    <option value="pubsub">Publish</option>
-                    <option value="jetstream">JetStream</option>
-                  </Select>
+          <TabsContent value="request" className="flex-1 overflow-hidden">
+            <ResizablePanels
+              direction={layoutMode}
+              defaultSize={50}
+              minSize={30}
+              maxSize={70}
+            >
+              <div className="p-4 space-y-4 h-full overflow-y-auto">
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="col-span-1">
+                    <label className="text-sm font-medium">Mode</label>
+                    <Select
+                      value={template.mode}
+                      onChange={(e) => setTemplate({ ...template, mode: e.target.value })}
+                    >
+                      <option value="request">Request/Reply</option>
+                      <option value="pubsub">Publish</option>
+                      <option value="jetstream">JetStream</option>
+                    </Select>
+                  </div>
+                  <div className="col-span-3">
+                    <label className="text-sm font-medium">Subject</label>
+                    <Input
+                      value={template.subject}
+                      onChange={(e) => setTemplate({ ...template, subject: e.target.value })}
+                      placeholder="service.action.{{.id}}"
+                    />
+                  </div>
                 </div>
-                <div className="col-span-3">
-                  <label className="text-sm font-medium">Subject</label>
-                  <Input
-                    value={template.subject}
-                    onChange={(e) => setTemplate({ ...template, subject: e.target.value })}
-                    placeholder="service.action.{{.id}}"
+
+                <div>
+                  <label className="text-sm font-medium">Payload</label>
+                  <Textarea
+                    value={template.payload}
+                    onChange={(e) => setTemplate({ ...template, payload: e.target.value })}
+                    placeholder='{"action": "{{.action}}", "data": "{{.data}}"}'
+                    rows={12}
+                    className="font-mono text-sm"
                   />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Use {"{{.variableName}}"} syntax to define variables
+                  </p>
+                </div>
+
+                <div className="flex gap-2 pt-2 border-t">
+                  <Button onClick={handleSave}>Save</Button>
+                  <Button onClick={handleSend} disabled={sending || !template.subject}>
+                    <Send className="mr-2 h-4 w-4" />
+                    {sending ? 'Sending...' : 'Send Request'}
+                  </Button>
                 </div>
               </div>
 
-              <div>
-                <label className="text-sm font-medium">Payload</label>
-                <Textarea
-                  value={template.payload}
-                  onChange={(e) => setTemplate({ ...template, payload: e.target.value })}
-                  placeholder='{"action": "{{.action}}", "data": "{{.data}}"}'
-                  rows={12}
-                  className="font-mono text-sm"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Use {"{{.variableName}}"} syntax to define variables
-                </p>
+              <div className="p-4 h-full overflow-y-auto">
+                {response ? (
+                  <div className="h-full flex flex-col">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold">Response</h3>
+                      <div className="flex items-center gap-4 text-sm">
+                        <span className={`font-medium ${response.status === 'error' ? 'text-red-500' : 'text-green-500'}`}>
+                          {response.status}
+                        </span>
+                        <span className="text-muted-foreground">{response.elapsed}</span>
+                      </div>
+                    </div>
+                    <Textarea
+                      value={response.message || response.reply || ''}
+                      readOnly
+                      rows={15}
+                      className="font-mono text-sm flex-1"
+                    />
+                  </div>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
+                    No response yet. Send a request to see the response here.
+                  </div>
+                )}
               </div>
-
-              <div className="flex gap-2 pt-2 border-t">
-                <Button onClick={handleSave}>Save</Button>
-                <Button onClick={handleSend} disabled={sending || !template.subject}>
-                  <Send className="mr-2 h-4 w-4" />
-                  {sending ? 'Sending...' : 'Send Request'}
-                </Button>
-              </div>
-            </TabsContent>
+            </ResizablePanels>
+          </TabsContent>
 
           <TabsContent value="variables" className="flex-1 p-4 overflow-y-auto">
             <VariablesTab 
@@ -235,30 +284,6 @@ export function RequestEditor({ templatePath, onSave }: RequestEditorProps) {
           </TabsContent>
         </Tabs>
       </CardContent>
-
-      {/* Response Card */}
-      {response && (
-        <div className="p-4 pt-0">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">Response</CardTitle>
-                <div className="flex items-center gap-4 text-sm">
-                  <span className={`font-medium ${response.status === 'error' ? 'text-red-500' : 'text-green-500'}`}>
-                    {response.status}
-                  </span>
-                  <span className="text-muted-foreground">{response.elapsed}</span>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <pre className="bg-muted p-4 rounded-md text-sm overflow-x-auto">
-                {response.reply || 'No response data'}
-              </pre>
-            </CardContent>
-          </Card>
-        </div>
-      )}
 
       {/* Modals */}
       <GlobalVariablesModal 
