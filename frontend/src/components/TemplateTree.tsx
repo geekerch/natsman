@@ -56,17 +56,23 @@ export function TemplateTree({ onSelectTemplate, onRefresh }: TemplateTreeProps)
     if (!newFileName) return
     
     try {
-      await api.createTemplate(newFileName + '.nm', {
+      // Ensure .nm extension
+      const fileName = newFileName.endsWith('.nm') ? newFileName : newFileName + '.nm'
+      console.log('Creating file:', fileName)
+      
+      await api.createTemplate(fileName, {
         mode: 'request',
         subject: '',
         payload: ''
       })
+      
       setShowCreateFile(false)
       setNewFileName('')
-      loadTree()
+      await loadTree()
       onRefresh?.()
     } catch (error) {
       console.error('Failed to create file:', error)
+      alert('Failed to create file: ' + (error as Error).message)
     }
   }
 
@@ -74,12 +80,15 @@ export function TemplateTree({ onSelectTemplate, onRefresh }: TemplateTreeProps)
     if (!newFolderName) return
     
     try {
+      console.log('Creating folder:', newFolderName)
+      
       await api.createFolder(newFolderName)
       setShowCreateFolder(false)
       setNewFolderName('')
-      loadTree()
+      await loadTree()
     } catch (error) {
       console.error('Failed to create folder:', error)
+      alert('Failed to create folder: ' + (error as Error).message)
     }
   }
 
@@ -87,13 +96,22 @@ export function TemplateTree({ onSelectTemplate, onRefresh }: TemplateTreeProps)
     if (!itemToDelete) return
     
     try {
+      console.log('Deleting:', itemToDelete)
+      
       await api.deleteTemplate(itemToDelete)
       setShowDeleteConfirm(false)
       setItemToDelete('')
-      loadTree()
+      
+      // Clear selection if deleted item was selected
+      if (selectedPath === itemToDelete) {
+        setSelectedPath('')
+      }
+      
+      await loadTree()
       onRefresh?.()
     } catch (error) {
       console.error('Failed to delete:', error)
+      alert('Failed to delete: ' + (error as Error).message)
     }
   }
 

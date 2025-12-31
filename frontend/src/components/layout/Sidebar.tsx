@@ -4,9 +4,13 @@ import {
   Radio, 
   Database, 
   FolderKanban, 
-  Settings 
+  Settings,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
+import { Button } from '../ui/button'
+import { useState } from 'react'
 
 const navigation = [
   { name: 'Requests', href: '/', icon: FileText },
@@ -18,17 +22,35 @@ const navigation = [
 
 export function Sidebar() {
   const location = useLocation()
+  const [collapsed, setCollapsed] = useState(false)
 
   return (
-    <div className="flex h-full w-64 flex-col bg-card border-r">
+    <div className={cn(
+      "flex h-full flex-col bg-card border-r transition-all duration-300",
+      collapsed ? "w-16" : "w-64"
+    )}>
       {/* Logo */}
-      <div className="flex h-16 items-center border-b px-6">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold">
-            N
+      <div className="flex h-16 items-center border-b px-4 justify-between">
+        {!collapsed && (
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold">
+              N
+            </div>
+            <span className="text-lg font-semibold">NATS Manager</span>
           </div>
-          <span className="text-lg font-semibold">NATS Manager</span>
-        </div>
+        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => setCollapsed(!collapsed)}
+        >
+          {collapsed ? (
+            <ChevronRight className="h-4 w-4" />
+          ) : (
+            <ChevronLeft className="h-4 w-4" />
+          )}
+        </Button>
       </div>
 
       {/* Navigation */}
@@ -43,23 +65,27 @@ export function Sidebar() {
                 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                 isActive
                   ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                collapsed && 'justify-center'
               )}
+              title={collapsed ? item.name : undefined}
             >
-              <item.icon className="h-5 w-5" />
-              {item.name}
+              <item.icon className="h-5 w-5 flex-shrink-0" />
+              {!collapsed && <span>{item.name}</span>}
             </Link>
           )
         })}
       </nav>
 
       {/* Footer */}
-      <div className="border-t p-4">
-        <div className="text-xs text-muted-foreground">
-          <div>Version 1.0.0</div>
-          <div className="mt-1">React + TypeScript</div>
+      {!collapsed && (
+        <div className="border-t p-4">
+          <div className="text-xs text-muted-foreground">
+            <div>Version 1.0.0</div>
+            <div className="mt-1">React + TypeScript</div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
