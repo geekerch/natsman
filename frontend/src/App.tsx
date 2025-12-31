@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { MainLayout } from './components/layout/MainLayout'
 import RequestsPage from './pages/RequestsPage'
 import { SubscriptionsPage } from './pages/SubscriptionsPage'
-import JetStreamPage from './pages/JetStreamPage'
+import JetStreamPage from './pages/JetStreamPageNew'
 import KVStorePage from './pages/KVStorePage'
 import SettingsPage from './pages/SettingsPage'
 

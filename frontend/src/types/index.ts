@@ -68,6 +68,50 @@ export interface StreamInfo {
   state: StreamState
 }
 
+export interface ConsumerInfo {
+  stream_name: string
+  name: string
+  config: {
+    deliver_policy: string
+    ack_policy: string
+    filter_subject?: string
+  }
+  delivered: {
+    consumer_seq: number
+    stream_seq: number
+  }
+  ack_floor: {
+    consumer_seq: number
+    stream_seq: number
+  }
+  num_pending: number
+  num_redelivered: number
+}
+
+export interface ConsumerCreateRequest {
+  stream_name: string
+  name: string
+  deliver_policy: string
+  ack_policy: string
+  filter_subject?: string
+  config: NatsConfig
+}
+
+export interface StreamMessage {
+  sequence: number
+  subject: string
+  data: string
+  time: string
+  size: number
+}
+
+export interface JSPublishRequest {
+  subject: string
+  body: string
+  variables?: Record<string, Variable>
+  config: NatsConfig
+}
+
 // Pub/Sub Types
 export interface Subscription {
   subject: string

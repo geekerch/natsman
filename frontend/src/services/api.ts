@@ -166,6 +166,42 @@ class ApiService {
     return res.json()
   }
 
+  async createConsumer(req: any): Promise<void> {
+    if (isDesktop()) {
+      return await window.go!.main!.App.CreateJSConsumer(req)
+    }
+    const res = await fetch(`${API_BASE}/jetstream/consumers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    })
+    if (!res.ok) throw new Error('Failed to create consumer')
+  }
+
+  async deleteConsumer(streamName: string, consumerName: string): Promise<void> {
+    if (isDesktop()) {
+      const cfg: NatsConfig = { url: '', creds_path: '' }
+      return await window.go!.main!.App.DeleteJSConsumer(streamName, consumerName, cfg)
+    }
+    const res = await fetch(`${API_BASE}/jetstream/consumers/${streamName}/${consumerName}`, {
+      method: 'DELETE',
+    })
+    if (!res.ok) throw new Error('Failed to delete consumer')
+  }
+
+  async publishToJetStream(req: any): Promise<any> {
+    if (isDesktop()) {
+      return await window.go!.main!.App.PublishToJetStream(req)
+    }
+    const res = await fetch(`${API_BASE}/jetstream/publish`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    })
+    if (!res.ok) throw new Error('Failed to publish to JetStream')
+    return res.json()
+  }
+
   // Pub/Sub
   async subscribe(payload: SubscribePayload): Promise<void> {
     if (isDesktop()) {
