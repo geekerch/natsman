@@ -155,15 +155,33 @@ class ApiService {
     if (!res.ok) throw new Error('Failed to delete stream')
   }
 
-  async getStreamMessages(streamName: string, refresh: boolean = false): Promise<any> {
+  async getStreamMessages(streamName: string, refresh: boolean = false, page: number = 1, perPage: number = 50): Promise<any> {
     if (isDesktop()) {
-      return await window.go!.main!.App.FetchAllStreamMessages(streamName, refresh)
+      const result = await window.go!.main!.App.FetchAllStreamMessages(streamName, refresh)
+      // Client-side pagination
+      const start = (page - 1) * perPage
+      const end = start + perPage
+      return {
+        messages: result.messages?.slice(start, end) || [],
+        total: result.messages?.length || 0,
+        page,
+        perPage
+      }
     }
     const res = await fetch(
       `${API_BASE}/jetstream/streams/${streamName}/messages/all?refresh=${refresh}`
     )
     if (!res.ok) throw new Error('Failed to get stream messages')
-    return res.json()
+    const result = await res.json()
+    // Client-side pagination for web
+    const start = (page - 1) * perPage
+    const end = start + perPage
+    return {
+      messages: result.messages?.slice(start, end) || [],
+      total: result.messages?.length || 0,
+      page,
+      perPage
+    }
   }
 
   async createConsumer(req: any): Promise<void> {

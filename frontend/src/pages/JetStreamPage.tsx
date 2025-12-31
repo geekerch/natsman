@@ -39,6 +39,10 @@ export default function JetStreamPage() {
   const [messages, setMessages] = useState<any[]>([])
   const [currentStreamForMessages, setCurrentStreamForMessages] = useState('')
   const [selectedMessage, setSelectedMessage] = useState<any>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalMessages, setTotalMessages] = useState(0)
+  const [pageInput, setPageInput] = useState('')
+  const messagesPerPage = 50
 
   useEffect(() => {
     loadStreams()
@@ -81,14 +85,42 @@ export default function JetStreamPage() {
     }
   }
 
-  const loadMessages = async (streamName: string) => {
+  const loadMessages = async (streamName: string, page: number = 1) => {
     try {
-      const result = await api.getStreamMessages(streamName, true)
+      const result = await api.getStreamMessages(streamName, true, page, messagesPerPage)
       setMessages(result.messages || [])
+      setTotalMessages(result.total || 0)
+      setCurrentPage(page)
+      setCurrentStreamForMessages(streamName)
     } catch (error) {
       console.error('Failed to load messages:', error)
       setMessages([])
+      setTotalMessages(0)
     }
+  }
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      loadMessages(currentStreamForMessages, currentPage - 1)
+    }
+  }
+
+  const handleNextPage = () => {
+    const totalPages = Math.ceil(totalMessages / messagesPerPage)
+    if (currentPage < totalPages) {
+      loadMessages(currentStreamForMessages, currentPage + 1)
+    }
+  }
+
+  const handleGotoPage = () => {
+    const page = parseInt(pageInput)
+    const totalPages = Math.ceil(totalMessages / messagesPerPage)
+    if (isNaN(page) || page < 1 || page > totalPages) {
+      alert(`Please enter a valid page number (1-${totalPages})`)
+      return
+    }
+    loadMessages(currentStreamForMessages, page)
+    setPageInput('')
   }
 
   const handleCreateStream = async () => {
@@ -157,9 +189,8 @@ export default function JetStreamPage() {
   }
 
   const handleViewMessages = async (streamName: string) => {
-    setCurrentStreamForMessages(streamName)
     setShowMessagesDialog(true)
-    await loadMessages(streamName)
+    await loadMessages(streamName, 1)
   }
 
   return (
@@ -467,10 +498,57 @@ export default function JetStreamPage() {
               </Button>
             </div>
           </DialogHeader>
-          <div className="flex gap-4 h-[60vh]">
+          <div className="space-y-4">
+            {/* Pagination Controls */}
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handlePrevPage}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Page {currentPage} of {Math.ceil(totalMessages / messagesPerPage)} ({totalMessages} total)
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleNextPage}
+                  disabled={currentPage >= Math.ceil(totalMessages / messagesPerPage)}
+                >
+                  Next
+                </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  className="w-20"
+                  type="number"
+                  placeholder="Page"
+                  value={pageInput}
+                  onChange={(e) => setPageInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleGotoPage()}
+                />
+                <Button size="sm" onClick={handleGotoPage}>
+                  Go
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => loadMessages(currentStreamForMessages, currentPage)}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Messages View */}
+            <div className="flex gap-4 h-[55vh]">
             <div className="flex-1 border rounded-lg overflow-hidden flex flex-col">
               <div className="bg-muted px-3 py-2 border-b">
-                <h4 className="text-sm font-medium">Messages ({messages.length})</h4>
+                <h4 className="text-sm font-medium">Messages</h4>
               </div>
               <div className="flex-1 overflow-y-auto">
                 {messages.length === 0 ? (
@@ -529,6 +607,7 @@ export default function JetStreamPage() {
                 </div>
               </div>
             )}
+          </div>
           </div>
         </DialogContent>
       </Dialog>
