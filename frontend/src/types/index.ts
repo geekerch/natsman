@@ -69,9 +69,15 @@ export interface StreamInfo {
 }
 
 // Pub/Sub Types
+export interface Subscription {
+  subject: string
+  message_count?: number
+}
+
 export interface SubscriptionMessage {
   subject: string
-  data: string
+  payload: string
+  reply_to?: string
   timestamp: string
 }
 

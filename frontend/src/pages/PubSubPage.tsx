@@ -191,7 +191,7 @@ export default function PubSubPage() {
                       </span>
                     </div>
                     <pre className="text-sm bg-muted p-2 rounded overflow-x-auto">
-                      {msg.data}
+                      {msg.payload}
                     </pre>
                   </div>
                 ))}

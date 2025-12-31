@@ -465,3 +465,23 @@ class ApiService {
 }
 
 export const api = new ApiService()
+
+// Specialized exports for specific features
+export const subscriptionsApi = {
+  async list() {
+    const subjects = await api.getActiveSubscriptions()
+    return subjects.map(subject => ({ subject, message_count: 0 }))
+  },
+  async subscribe(subject: string) {
+    return api.subscribe({ subject, config: { url: '', creds_path: '' } })
+  },
+  async unsubscribe(subject: string) {
+    return api.unsubscribe(subject)
+  },
+  async getMessages(subject: string) {
+    return api.getSubscriptionMessages(subject)
+  },
+  async clearMessages(subject: string) {
+    return api.clearSubscriptionMessages(subject)
+  },
+}
