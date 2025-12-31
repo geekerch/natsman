@@ -27,6 +27,7 @@ export function RequestEditor({ templatePath, onSave }: RequestEditorProps) {
   const [localVars, setLocalVars] = useState<Record<string, Variable>>({})
   const [showGlobals, setShowGlobals] = useState(false)
   const [showExtensions, setShowExtensions] = useState(false)
+  const [activeTab, setActiveTab] = useState<'request' | 'variables'>('request')
 
   useEffect(() => {
     if (templatePath) {
@@ -39,10 +40,11 @@ export function RequestEditor({ templatePath, onSave }: RequestEditorProps) {
       })
       setLocalVars({})
       setResponse(null)
+      setActiveTab('request')
     }
   }, [templatePath])
 
-  // Phase 1: Auto-extract variables from template
+  // Auto-extract variables from template
   useEffect(() => {
     if (template.subject || template.payload) {
       extractVariables()
@@ -137,6 +139,8 @@ export function RequestEditor({ templatePath, onSave }: RequestEditorProps) {
     )
   }
 
+  const varCount = Object.keys(localVars).length
+
   return (
     <div className="h-full flex flex-col gap-4 p-4 overflow-y-auto">
       {/* Configuration Card */}
@@ -165,43 +169,82 @@ export function RequestEditor({ templatePath, onSave }: RequestEditorProps) {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-4 gap-4">
-            <div className="col-span-1">
-              <label className="text-sm font-medium">Mode</label>
-              <Select
-                value={template.mode}
-                onChange={(e) => setTemplate({ ...template, mode: e.target.value })}
-              >
-                <option value="request">Request/Reply</option>
-                <option value="pubsub">Publish</option>
-                <option value="jetstream">JetStream</option>
-              </Select>
-            </div>
-            <div className="col-span-3">
-              <label className="text-sm font-medium">Subject</label>
-              <Input
-                value={template.subject}
-                onChange={(e) => setTemplate({ ...template, subject: e.target.value })}
-                placeholder="service.action.{{.id}}"
-              />
-            </div>
+          {/* Tab Navigation */}
+          <div className="flex border-b">
+            <button
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'request'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+              onClick={() => setActiveTab('request')}
+            >
+              Request
+            </button>
+            <button
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'variables'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+              onClick={() => setActiveTab('variables')}
+            >
+              Variables
+              {varCount > 0 && (
+                <span className="ml-2 px-1.5 py-0.5 text-xs bg-primary/10 text-primary rounded">
+                  {varCount}
+                </span>
+              )}
+            </button>
           </div>
 
-          <div>
-            <label className="text-sm font-medium">Payload</label>
-            <Textarea
-              value={template.payload}
-              onChange={(e) => setTemplate({ ...template, payload: e.target.value })}
-              placeholder='{"action": "{{.action}}", "data": "{{.data}}"}'
-              rows={10}
-              className="font-mono text-sm"
+          {/* Tab Content */}
+          {activeTab === 'request' ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-4 gap-4">
+                <div className="col-span-1">
+                  <label className="text-sm font-medium">Mode</label>
+                  <Select
+                    value={template.mode}
+                    onChange={(e) => setTemplate({ ...template, mode: e.target.value })}
+                  >
+                    <option value="request">Request/Reply</option>
+                    <option value="pubsub">Publish</option>
+                    <option value="jetstream">JetStream</option>
+                  </Select>
+                </div>
+                <div className="col-span-3">
+                  <label className="text-sm font-medium">Subject</label>
+                  <Input
+                    value={template.subject}
+                    onChange={(e) => setTemplate({ ...template, subject: e.target.value })}
+                    placeholder="service.action.{{.id}}"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Payload</label>
+                <Textarea
+                  value={template.payload}
+                  onChange={(e) => setTemplate({ ...template, payload: e.target.value })}
+                  placeholder='{"action": "{{.action}}", "data": "{{.data}}"}'
+                  rows={12}
+                  className="font-mono text-sm"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Use {"{{.variableName}}"} syntax to define variables
+                </p>
+              </div>
+            </div>
+          ) : (
+            <VariablesTab 
+              variables={localVars} 
+              onUpdate={updateLocalVar}
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              Use {"{{.variableName}}"} syntax to define variables
-            </p>
-          </div>
+          )}
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 pt-2 border-t">
             <Button onClick={handleSave}>Save</Button>
             <Button onClick={handleSend} disabled={sending || !template.subject}>
               <Send className="mr-2 h-4 w-4" />
@@ -210,65 +253,6 @@ export function RequestEditor({ templatePath, onSave }: RequestEditorProps) {
           </div>
         </CardContent>
       </Card>
-
-      {/* Phase 2: Local Variables Card */}
-      {Object.keys(localVars).length > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">
-              Local Variables <span className="text-sm text-muted-foreground">({Object.keys(localVars).length})</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {Object.entries(localVars).map(([name, variable]) => (
-                <div key={name} className="border rounded-lg p-3 space-y-2">
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1">
-                      <label className="text-xs font-medium text-muted-foreground">Variable Name</label>
-                      <div className="text-sm font-mono font-semibold mt-1">{"{{." + name + "}}"}</div>
-                    </div>
-                    <div className="w-40">
-                      <label className="text-xs font-medium text-muted-foreground">Type</label>
-                      <Select
-                        value={variable.type}
-                        onChange={(e) => updateLocalVar(name, { ...variable, type: e.target.value as Variable['type'] })}
-                        className="mt-1 text-sm"
-                      >
-                        <option value="static">Static</option>
-                        <option value="env">Environment</option>
-                        <option value="dynamic">Dynamic (JS)</option>
-                      </Select>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground">
-                      {variable.type === 'dynamic' ? 'JavaScript Code' : variable.type === 'env' ? 'Environment Variable' : 'Value'}
-                    </label>
-                    {variable.type === 'dynamic' ? (
-                      <Textarea
-                        value={variable.value}
-                        onChange={(e) => updateLocalVar(name, { ...variable, value: e.target.value })}
-                        placeholder="return new Date().toISOString()"
-                        rows={3}
-                        className="mt-1 font-mono text-sm"
-                      />
-                    ) : (
-                      <Input
-                        value={variable.value}
-                        onChange={(e) => updateLocalVar(name, { ...variable, value: e.target.value })}
-                        placeholder={variable.type === 'env' ? 'ENV_VAR_NAME' : 'Enter value'}
-                        className="mt-1 text-sm"
-                      />
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Response Card */}
       {response && (
@@ -301,6 +285,162 @@ export function RequestEditor({ templatePath, onSave }: RequestEditorProps) {
         isOpen={showExtensions} 
         onClose={() => setShowExtensions(false)} 
       />
+    </div>
+  )
+}
+
+interface VariablesTabProps {
+  variables: Record<string, Variable>
+  onUpdate: (name: string, variable: Variable) => void
+}
+
+function VariablesTab({ variables, onUpdate }: VariablesTabProps) {
+  const varCount = Object.keys(variables).length
+
+  if (varCount === 0) {
+    return (
+      <div className="text-center py-12 text-muted-foreground text-sm">
+        No variables detected. Use {"{{.variableName}}"} syntax in Subject or Payload.
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between text-sm">
+        <span className="font-medium">Local Variables</span>
+        <span className="text-muted-foreground">{varCount} variable{varCount !== 1 ? 's' : ''}</span>
+      </div>
+      
+      {Object.entries(variables).map(([name, variable]) => (
+        <VariableItem
+          key={name}
+          name={name}
+          variable={variable}
+          onUpdate={(v) => onUpdate(name, v)}
+        />
+      ))}
+    </div>
+  )
+}
+
+interface VariableItemProps {
+  name: string
+  variable: Variable
+  onUpdate: (variable: Variable) => void
+}
+
+const BUILTIN_FUNCTIONS = [
+  { value: 'timestamp()', label: 'Timestamp (Seconds)' },
+  { value: 'timestampMs()', label: 'Timestamp (MS)' },
+  { value: 'uuid()', label: 'UUID' },
+  { value: 'now()', label: 'ISO 8601 Date' },
+  { value: 'randomInt(1, 100)', label: 'Random Int' },
+]
+
+function VariableItem({ name, variable, onUpdate }: VariableItemProps) {
+  const [testResult, setTestResult] = useState<string>('')
+  const [testing, setTesting] = useState(false)
+
+  const handleTest = async () => {
+    if (!variable.value) return
+    
+    setTesting(true)
+    setTestResult('')
+    try {
+      const result = await api.testDynamicVariable(variable.value)
+      setTestResult(`✓ Result: ${result}`)
+    } catch (error: any) {
+      setTestResult(`✗ Error: ${error.message}`)
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  const insertSnippet = (snippet: string) => {
+    onUpdate({ ...variable, value: snippet })
+  }
+
+  return (
+    <div className="border rounded-lg p-3 space-y-2.5 bg-card">
+      {/* Header Row */}
+      <div className="flex items-center gap-3">
+        <div className="flex-1">
+          <div className="text-xs font-medium text-muted-foreground mb-1">Variable Name</div>
+          <div className="text-sm font-mono font-semibold">{"{{." + name + "}}"}</div>
+        </div>
+        <div className="w-40">
+          <div className="text-xs font-medium text-muted-foreground mb-1">Type</div>
+          <Select
+            value={variable.type}
+            onChange={(e) => onUpdate({ ...variable, type: e.target.value as Variable['type'] })}
+            className="text-sm"
+          >
+            <option value="static">Static</option>
+            <option value="dynamic">Dynamic (JS)</option>
+            <option value="env">Environment</option>
+          </Select>
+        </div>
+      </div>
+      
+      {/* Value Row */}
+      <div>
+        <div className="text-xs font-medium text-muted-foreground mb-1">
+          {variable.type === 'dynamic' ? 'JavaScript Code' : variable.type === 'env' ? 'Environment Variable' : 'Value'}
+        </div>
+        {variable.type === 'dynamic' ? (
+          <div className="space-y-2">
+            <Textarea
+              value={variable.value}
+              onChange={(e) => onUpdate({ ...variable, value: e.target.value })}
+              placeholder="e.g. timestamp() or uuid()"
+              rows={2}
+              className="font-mono text-sm"
+            />
+            <div className="flex gap-2">
+              <Select
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) {
+                    insertSnippet(e.target.value)
+                    e.target.value = ''
+                  }
+                }}
+                className="text-xs flex-1"
+              >
+                <option value="">Insert Snippet...</option>
+                {BUILTIN_FUNCTIONS.map(fn => (
+                  <option key={fn.value} value={fn.value}>{fn.label}</option>
+                ))}
+              </Select>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleTest}
+                disabled={testing || !variable.value}
+              >
+                {testing ? 'Testing...' : 'Test'}
+              </Button>
+            </div>
+            {testResult && (
+              <div className={`text-xs p-2 rounded ${
+                testResult.startsWith('✓') 
+                  ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300' 
+                  : 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300'
+              }`}>
+                {testResult}
+              </div>
+            )}
+          </div>
+        ) : (
+          <Input
+            value={variable.value}
+            onChange={(e) => onUpdate({ ...variable, value: e.target.value })}
+            placeholder={variable.type === 'env' ? 'ENV_VAR_NAME' : `Enter value for ${name}...`}
+            className="text-sm"
+          />
+        )}
+      </div>
     </div>
   )
 }

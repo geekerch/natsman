@@ -414,6 +414,22 @@ class ApiService {
     return res.json()
   }
 
+  // Test Dynamic Variable
+  async testDynamicVariable(script: string): Promise<string> {
+    if (isDesktop()) {
+      return await window.go!.main!.App.EvalDynamicScript(script)
+    }
+    const res = await fetch(`${API_BASE}/variables/test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ script }),
+    })
+    if (!res.ok) throw new Error('Failed to test variable')
+    const data = await res.json()
+    if (data.error) throw new Error(data.error)
+    return data.result
+  }
+
   // Extensions
   async listExtensions(): Promise<string[]> {
     if (isDesktop()) {
