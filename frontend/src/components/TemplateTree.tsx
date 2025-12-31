@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, forwardRef, useImperativeHandle } from 'react'
 import { ChevronRight, ChevronDown, Folder, FileText, Trash2 } from 'lucide-react'
 import type { TreeNode as TreeNodeType } from '../types'
 import { Button } from './ui/button'
@@ -12,7 +12,13 @@ interface TemplateTreeProps {
   onRefresh?: () => void
 }
 
-export function TemplateTree({ onSelectTemplate, onRefresh }: TemplateTreeProps) {
+export interface TemplateTreeRef {
+  showCreateFile: () => void
+  showCreateFolder: () => void
+}
+
+export const TemplateTree = forwardRef<TemplateTreeRef, TemplateTreeProps>(
+  ({ onSelectTemplate, onRefresh }, ref) => {
   const [tree, setTree] = useState<TreeNodeType | null>(null)
   const [selectedPath, setSelectedPath] = useState<string>('')
   const [loading, setLoading] = useState(false)
@@ -28,6 +34,11 @@ export function TemplateTree({ onSelectTemplate, onRefresh }: TemplateTreeProps)
   // Delete confirmation
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [itemToDelete, setItemToDelete] = useState('')
+
+  useImperativeHandle(ref, () => ({
+    showCreateFile: () => setShowCreateFile(true),
+    showCreateFolder: () => setShowCreateFolder(true)
+  }))
 
   useEffect(() => {
     loadTree()
@@ -122,49 +133,23 @@ export function TemplateTree({ onSelectTemplate, onRefresh }: TemplateTreeProps)
 
   return (
     <>
-      <div className="h-full flex flex-col">
-        <div className="flex items-center justify-between p-3 border-b">
-          <h3 className="font-semibold text-sm">Templates</h3>
-          <div className="flex gap-1">
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7"
-              onClick={() => setShowCreateFile(true)}
-              title="New File"
-            >
-              <FileText className="h-4 w-4" />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7"
-              onClick={() => setShowCreateFolder(true)}
-              title="New Folder"
-            >
-              <Folder className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-        
-        <div className="flex-1 overflow-y-auto p-2">
-          {loading ? (
-            <div className="text-sm text-muted-foreground p-2">Loading...</div>
-          ) : tree && tree.children && tree.children.length > 0 ? (
-            tree.children.map((child: TreeNodeType) => (
-              <TreeNodeComponent
-                key={child.path}
-                node={child}
-                level={0}
-                selectedPath={selectedPath}
-                onSelect={handleSelect}
-                onDelete={confirmDelete}
-              />
-            ))
-          ) : (
-            <div className="text-sm text-muted-foreground p-2">No templates</div>
-          )}
-        </div>
+      <div className="h-full flex flex-col p-4">
+        {loading ? (
+          <div className="text-sm text-muted-foreground py-8 text-center">Loading...</div>
+        ) : tree && tree.children && tree.children.length > 0 ? (
+          tree.children.map((child: TreeNodeType) => (
+            <TreeNodeComponent
+              key={child.path}
+              node={child}
+              level={0}
+              selectedPath={selectedPath}
+              onSelect={handleSelect}
+              onDelete={confirmDelete}
+            />
+          ))
+        ) : (
+          <div className="text-sm text-muted-foreground py-8 text-center">No templates</div>
+        )}
       </div>
 
       {/* Create File Dialog */}
@@ -233,7 +218,9 @@ export function TemplateTree({ onSelectTemplate, onRefresh }: TemplateTreeProps)
       </Dialog>
     </>
   )
-}
+})
+
+TemplateTree.displayName = 'TemplateTree'
 
 interface TreeNodeProps {
   node: TreeNodeType
