@@ -245,38 +245,26 @@ export default function JetStreamPage() {
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <div className="text-sm font-medium text-muted-foreground">Storage</div>
-                            <div className="text-lg">{streamInfo.config.storage}</div>
+                            <div className="text-lg">{streamInfo.storage}</div>
                           </div>
                           <div>
                             <div className="text-sm font-medium text-muted-foreground">Replicas</div>
-                            <div className="text-lg">{streamInfo.config.replicas}</div>
-                          </div>
-                          <div>
-                            <div className="text-sm font-medium text-muted-foreground">Messages</div>
-                            <div className="text-lg">{streamInfo.state.messages}</div>
-                          </div>
-                          <div>
-                            <div className="text-sm font-medium text-muted-foreground">Consumers</div>
-                            <div className="text-lg">{streamInfo.state.consumer_count}</div>
-                          </div>
-                          <div>
-                            <div className="text-sm font-medium text-muted-foreground">Bytes</div>
-                            <div className="text-lg">{streamInfo.state.bytes}</div>
-                          </div>
-                          <div>
-                            <div className="text-sm font-medium text-muted-foreground">First Seq</div>
-                            <div className="text-lg">{streamInfo.state.first_seq}</div>
+                            <div className="text-lg">{streamInfo.replicas}</div>
                           </div>
                         </div>
                         
                         <div>
                           <div className="text-sm font-medium text-muted-foreground mb-2">Subjects</div>
                           <div className="flex flex-wrap gap-2">
-                            {streamInfo.config.subjects?.map((subject, idx) => (
-                              <span key={idx} className="px-2 py-1 bg-muted rounded text-sm font-mono">
-                                {subject}
-                              </span>
-                            ))}
+                            {streamInfo.subjects && streamInfo.subjects.length > 0 ? (
+                              streamInfo.subjects.map((subject, idx) => (
+                                <span key={idx} className="px-2 py-1 bg-muted rounded text-sm font-mono">
+                                  {subject}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-sm text-muted-foreground">No subjects</span>
+                            )}
                           </div>
                         </div>
                       </div>

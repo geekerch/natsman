@@ -47,25 +47,11 @@ export interface StreamCreateRequest {
   config: NatsConfig
 }
 
-export interface StreamConfig {
+export interface StreamInfo {
   name: string
-  subjects?: string[]
+  subjects: string[]
   storage: string
   replicas: number
-}
-
-export interface StreamState {
-  messages: number
-  bytes: number
-  first_seq: number
-  last_seq: number
-  consumer_count: number
-}
-
-export interface StreamInfo {
-  config: StreamConfig
-  created: string
-  state: StreamState
 }
 
 export interface ConsumerInfo {
