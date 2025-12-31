@@ -178,6 +178,16 @@ class ApiService {
     if (!res.ok) throw new Error('Failed to create consumer')
   }
 
+  async listConsumers(streamName: string): Promise<string[]> {
+    if (isDesktop()) {
+      return await window.go!.main!.App.ListJSConsumers(streamName)
+    }
+    const res = await fetch(`${API_BASE}/jetstream/streams/${streamName}/consumers`)
+    if (!res.ok) throw new Error('Failed to list consumers')
+    const data = await res.json()
+    return data.consumers || []
+  }
+
   async deleteConsumer(streamName: string, consumerName: string): Promise<void> {
     if (isDesktop()) {
       const cfg: NatsConfig = { url: '', creds_path: '' }
