@@ -54,7 +54,7 @@ export function ExtensionsModal({ isOpen, onClose }: ExtensionsModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+      <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} />
       <div className="relative z-50 bg-white dark:bg-gray-900 border rounded-lg shadow-lg w-full max-w-lg mx-4">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b">
