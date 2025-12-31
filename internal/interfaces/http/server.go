@@ -43,15 +43,6 @@ func SetupRouter(exeDir string, appCfg *config.AppConfig, configPath string, tmp
 		c.Next()
 	})
 
-	// Log 404s explicitly
-	r.NoRoute(func(c *gin.Context) {
-		log.Printf("[GIN DEBUG] 404 Not Found: %s %s", c.Request.Method, c.Request.URL.Path)
-		c.JSON(http.StatusNotFound, gin.H{"error": "Route not found", "path": c.Request.URL.Path})
-	})
-
-	// Setup static files
-	setupStaticFiles(r, exeDir, embeddedFS)
-
 	api := r.Group("/api")
 	{
 		// Get active NATS config
@@ -772,6 +763,9 @@ func SetupRouter(exeDir string, appCfg *config.AppConfig, configPath string, tmp
 		})
 	}
 
+	// Setup static files after API routes
+	setupStaticFiles(r, exeDir, embeddedFS)
+
 	return r
 }
 
@@ -793,8 +787,20 @@ func setupStaticFiles(r *gin.Engine, exeDir string, embeddedFS embed.FS) {
 	}
 	r.StaticFS("/assets", http.FS(assetsFS))
 
-	// Serve index.html at root
-	r.GET("/", func(c *gin.Context) {
+	// Serve index.html for root and all non-API routes (SPA fallback)
+	r.NoRoute(func(c *gin.Context) {
+		path := c.Request.URL.Path
+		log.Printf("[GIN DEBUG] NoRoute handler: %s %s", c.Request.Method, path)
+		
+		// If the request is for API, return 404
+		if len(path) >= 4 && path[:4] == "/api" {
+			log.Printf("[GIN DEBUG] API 404 Not Found: %s", path)
+			c.JSON(http.StatusNotFound, gin.H{"error": "Route not found", "path": path})
+			return
+		}
+		
+		// Otherwise serve index.html for SPA routing
+		log.Printf("[GIN DEBUG] Serving index.html for SPA route: %s", path)
 		data, err := embeddedFS.ReadFile("frontend/dist/index.html")
 		if err != nil {
 			c.String(http.StatusInternalServerError, "Failed to load index.html")
