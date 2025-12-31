@@ -23,8 +23,13 @@ export default function SettingsPage() {
 
   const loadProfiles = async () => {
     try {
+      console.log('Loading profiles...')
       const profileList = await api.getNatsProfiles()
+      console.log('Profiles loaded:', profileList)
+      
       const active = await api.getActiveNatsProfile()
+      console.log('Active profile:', active)
+      
       setProfiles(profileList)
       setActiveProfile(active)
       
@@ -37,6 +42,7 @@ export default function SettingsPage() {
       }
     } catch (error) {
       console.error('Failed to load profiles:', error)
+      alert('Failed to load profiles: ' + (error as Error).message)
     }
   }
 

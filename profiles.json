@@ -11,9 +11,24 @@
       "Name": "Default",
       "URL": "nats://172.16.8.9:24222",
       "CredsPath": ""
+    },
+    {
+      "Name": "default",
+      "URL": "nats://localhost:4222",
+      "CredsPath": ""
+    },
+    {
+      "Name": "11",
+      "URL": "nats://localhost:4222",
+      "CredsPath": ""
+    },
+    {
+      "Name": "22",
+      "URL": "nats://localhost:4222",
+      "CredsPath": ""
     }
   ],
-  "active_nats_profile": "Default",
+  "active_nats_profile": "11",
   "js_extensions": [
     "example.js"
   ]
